@@ -1,6 +1,6 @@
 require './db_types.rb'
 puts '--------------------------------------------------------'
-
+#export RUBY_THREAD_VM_STACK_SIZE=50000000
 module RDL::Globals
   # Map from table names (symbols) to their schema types, which should be a Table type
   @db_schema = {}
@@ -150,11 +150,13 @@ RDL.type Post, :has_active_flag?, '() -> %bool', typecheck: :later, wrap: false
 RDL.type Post, :is_flagged?, '() -> %bool', typecheck: :later, wrap: false
 RDL.type Post, :is_reply_by_email?, '() -> %bool', typecheck: :later, wrap: false
 RDL.type Post, :add_detail, "(String, String, ?String) -> PostDetail", typecheck: :later, wrap: false
+
 RDL.type Post, :limit_posts_per_day, '() -> RateLimiter', typecheck: :later, wrap: false
 RDL.type Archetype, 'self.private_message', '() -> String', typecheck: :later, wrap: false
 RDL.type Group, :posts_for, '(Guardian, ?Hash<Symbol, Integer>) -> ActiveRecord_Relation<JoinTable<Post, User or Topic or Category>>', typecheck: :later, wrap: false
 RDL.type Group, :messages_for, '(Guardian, ?Hash<Symbol, Integer>) -> ActiveRecord_Relation<JoinTable<Post, User or Topic or Category>>', typecheck: :later, wrap: false
 RDL.type Group, :mentioned_posts_for, '(Guardian, ?Hash<Symbol, Integer>) -> ActiveRecord_Relation<JoinTable<Post, User or Topic or Category or GroupMention>>', typecheck: :later, wrap: false
+
 RDL.type Group, 'self.trust_group_ids', '() -> Array<Integer>', typecheck: :later, wrap: false
 RDL.type Group, 'self.desired_trust_level_groups', '(Integer) -> Array<Integer>', typecheck: :later, wrap: false
 RDL.type Group, 'self.user_trust_level_change!', '(Integer, Integer) -> Array<Integer>', typecheck: :later, wrap: false
@@ -173,3 +175,4 @@ RDL.type Notification, :post, '() -> Post', typecheck: :later, wrap: false
 
 ## typecheck
 RDL.do_typecheck :later
+

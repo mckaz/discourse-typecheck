@@ -1,4 +1,4 @@
-#### get rid of static errors
+NESTED_JOINS = false
 
 class ActiveRecord::Base
   extend RDL::Annotate
@@ -112,13 +112,12 @@ module ActiveRecord::Querying
 
 
   type :joins, '(``DBType.joins_one_input_type(trec, targs)``) -> ``DBType.joins_output(trec, targs)``', wrap: false
-  type :joins, '(``DBType.joins_multi_input_type(trec, targs)``, Symbol or Hash, *Symbol or Hash) -> ``DBType.joins_output(trec, targs)``', wrap: false
-
+  type :joins, '(``DBType.joins_multi_input_type(trec, targs)``, %any, *%any) -> ``DBType.joins_output(trec, targs)``', wrap: false
   type :group, '(Symbol) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), DBType.rec_to_nominal(trec))``', wrap: false
   type :select, '(Symbol or String or Array<String>, *Symbol or String or Array<String>) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), DBType.rec_to_nominal(trec))``', wrap: false
   type :order, '(String) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), DBType.rec_to_nominal(trec))``', wrap: false
   type :includes, '(``DBType.joins_one_input_type(trec, targs)``) -> ``DBType.joins_output(trec, targs)``', wrap: false
-  type :includes, '(``DBType.joins_multi_input_type(trec, targs)``, Symbol or Hash, *Symbol or Hash) -> ``DBType.joins_output(trec, targs)``', wrap: false
+  type :includes, '(``DBType.joins_multi_input_type(trec, targs)``, %any, *%any) -> ``DBType.joins_output(trec, targs)``', wrap: false
   type :limit, '(Integer) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), DBType.rec_to_nominal(trec))``', wrap: false 
   type :count, '() -> Integer', wrap: false
   type :count, '(``DBType.count_input(trec, targs)``) -> Integer', wrap: false
@@ -138,14 +137,12 @@ module ActiveRecord::QueryMethods
   type :where, '() -> ``DBType.where_noarg_output_type(trec)``', wrap: false
 
   type :joins, '(``DBType.joins_one_input_type(trec, targs)``) -> ``DBType.joins_output(trec, targs)``', wrap: false
-  type :joins, '(``DBType.joins_multi_input_type(trec, targs)``, Symbol or Hash, *Symbol or Hash) -> ``DBType.joins_output(trec, targs)``', wrap: false
-
+  type :joins, '(``DBType.joins_multi_input_type(trec, targs)``, %any, *%any) -> ``DBType.joins_output(trec, targs)``', wrap: false
   type :group, '(Symbol) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), trec.params[0])``', wrap: false
   type :select, '(Symbol or String or Array<String>, *Symbol or String or Array<String>) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), trec.params[0])``', wrap: false
   type :order, '(String) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), trec.params[0])``', wrap: false
   type :includes, '(``DBType.joins_one_input_type(trec, targs)``) -> ``DBType.joins_output(trec, targs)``', wrap: false
-  type :includes, '(``DBType.joins_multi_input_type(trec, targs)``, Symbol or Hash, *Symbol or Hash) -> ``DBType.joins_output(trec, targs)``', wrap: false
-  #type :includes, '(*Symbol or Hash) -> %any', wrap: false
+  type :includes, '(``DBType.joins_multi_input_type(trec, targs)``, %any, *%any) -> ``DBType.joins_output(trec, targs)``', wrap: false
   type :limit, '(Integer) -> ``trec``', wrap: false
   type :references, '(Symbol, *Symbol) -> self', wrap: false
 end
@@ -285,12 +282,14 @@ class DBType
             joined_type = table_name_to_schema_type(joined_name, check_col, takes_array)
             joined_hash[joined_name.to_s.pluralize.underscore.to_sym] = joined_type #RDL::Type::OptionalType.new(joined_type) ## type queries on joined tables use the joined table's plural name
           }
-          joined_hash.each { |k1, v1|
-            joined_hash.each { |k2, v2|
-              v1.elts[k2] = RDL::Type::OptionalType.new(v2)
-              type_hash[k1] = RDL::Type::OptionalType.new(v1)
+          if NESTED_JOINS
+            joined_hash.each { |k1, v1|
+              joined_hash.each { |k2, v2|
+                v1.elts[k2] = RDL::Type::OptionalType.new(v2)
+                type_hash[k1] = RDL::Type::OptionalType.new(v1)
+              }
             }
-          }
+          end
         else
           raise "unexpected type #{trec}"
         end
