@@ -1,10 +1,15 @@
 import SelectKitComponent from "select-kit/components/select-kit";
-import { on } from "ember-addons/ember-computed-decorators";
-import computed from "ember-addons/ember-computed-decorators";
-const { get, isNone, isEmpty, isPresent, run } = Ember;
+import {
+  default as computed,
+  on
+} from "ember-addons/ember-computed-decorators";
+const { get, isNone, isEmpty, isPresent, run, makeArray } = Ember;
+
+import { applyOnSelectPluginApiCallbacks } from "select-kit/mixins/plugin-api";
 
 export default SelectKitComponent.extend({
   pluginApiIdentifiers: ["single-select"],
+  layoutName: "select-kit/templates/components/single-select",
   classNames: "single-select",
   computedValue: null,
   value: null,
@@ -14,30 +19,33 @@ export default SelectKitComponent.extend({
   _compute() {
     run.scheduleOnce("afterRender", () => {
       this.willComputeAttributes();
-      let content = this.willComputeContent(this.get("content") || []);
+      let content = this.get("content") || [];
+      let asyncContent = this.get("asyncContent") || [];
+      content = this.willComputeContent(content);
+      asyncContent = this.willComputeAsyncContent(asyncContent);
       let value = this._beforeWillComputeValue(this.get("value"));
       content = this.computeContent(content);
+      asyncContent = this.computeAsyncContent(asyncContent);
       content = this._beforeDidComputeContent(content);
+      asyncContent = this._beforeDidComputeAsyncContent(asyncContent);
       value = this.willComputeValue(value);
       value = this.computeValue(value);
       value = this._beforeDidComputeValue(value);
       this.didComputeContent(content);
+      this.didComputeAsyncContent(asyncContent);
       this.didComputeValue(value);
       this.didComputeAttributes();
 
       if (this.get("allowInitialValueMutation")) this.mutateAttributes();
-
-      this._setHeaderComputedContent();
     });
   },
 
   mutateAttributes() {
-    if (this.get("isDestroyed") || this.get("isDestroying")) return;
-
     run.next(() => {
+      if (this.get("isDestroyed") || this.get("isDestroying")) return;
+
       this.mutateContent(this.get("computedContent"));
       this.mutateValue(this.get("computedValue"));
-      this._setHeaderComputedContent();
     });
   },
   mutateContent() {},
@@ -46,46 +54,85 @@ export default SelectKitComponent.extend({
   },
 
   _beforeWillComputeValue(value) {
-    if (!isEmpty(this.get("content")) && isEmpty(value) && isNone(this.get("none"))) {
+    if (
+      !isEmpty(this.get("content")) &&
+      isEmpty(value) &&
+      isNone(this.get("none")) &&
+      this.get("allowAutoSelectFirst")
+    ) {
       value = this.valueForContentItem(get(this.get("content"), "firstObject"));
     }
 
     switch (typeof value) {
-    case "string":
-    case "number":
-      return this._castInteger(value === "" ? null : value);
-    default:
-      return value;
+      case "string":
+      case "number":
+        return this._cast(value === "" ? null : value);
+      default:
+        return value;
     }
   },
-  willComputeValue(value) { return value; },
-  computeValue(value) { return value; },
+  willComputeValue(value) {
+    return value;
+  },
+  computeValue(value) {
+    return value;
+  },
   _beforeDidComputeValue(value) {
     this.setProperties({ computedValue: value });
     return value;
   },
-  didComputeValue(value) { return value; },
+  didComputeValue(value) {
+    return value;
+  },
 
   filterComputedContent(computedContent, computedValue, filter) {
-    const lowerFilter = filter.toLowerCase();
     return computedContent.filter(c => {
-      return get(c, "name").toLowerCase().indexOf(lowerFilter) > -1;
+      return this._normalize(get(c, "name")).indexOf(filter) > -1;
     });
   },
 
-  baseHeaderComputedContent() {
-    return {
+  computeHeaderContent() {
+    let content = {
       title: this.get("title"),
-      icons: Ember.makeArray(this.getWithDefault("headerIcon", [])),
-      value: this.get("selectedComputedContent.value"),
-      name: this.get("selectedComputedContent.name") || this.get("noneRowComputedContent.name")
+      icons: makeArray(this.getWithDefault("headerIcon", [])),
+      value: this.get("selection.value"),
+      name:
+        this.get("selection.name") || this.get("noneRowComputedContent.name")
     };
+
+    if (this.get("noneLabel") && !this.get("hasSelection")) {
+      content.title = content.name = I18n.t(this.get("noneLabel"));
+    }
+
+    return content;
+  },
+
+  @computed("computedAsyncContent.[]", "computedValue")
+  filteredAsyncComputedContent(computedAsyncContent, computedValue) {
+    computedAsyncContent = computedAsyncContent.filter(c => {
+      return computedValue !== get(c, "value");
+    });
+
+    if (this.get("limitMatches")) {
+      return computedAsyncContent.slice(0, this.get("limitMatches"));
+    }
+
+    return computedAsyncContent;
   },
 
   @computed("computedContent.[]", "computedValue", "filter", "shouldFilter")
-  filteredComputedContent(computedContent, computedValue, filter, shouldFilter) {
-    if (shouldFilter === true) {
-      computedContent = this.filterComputedContent(computedContent, computedValue, filter);
+  filteredComputedContent(
+    computedContent,
+    computedValue,
+    filter,
+    shouldFilter
+  ) {
+    if (shouldFilter) {
+      computedContent = this.filterComputedContent(
+        computedContent,
+        computedValue,
+        this._normalize(filter)
+      );
     }
 
     if (this.get("limitMatches")) {
@@ -96,83 +143,146 @@ export default SelectKitComponent.extend({
   },
 
   @computed("computedValue", "computedContent.[]")
-  selectedComputedContent(computedValue, computedContent) {
+  selection(computedValue, computedContent) {
     return computedContent.findBy("value", computedValue);
   },
 
-  @computed("selectedComputedContent")
-  hasSelection(selectedComputedContent) {
-    return selectedComputedContent !== this.get("noneRowComputedContent") &&
-      !Ember.isNone(selectedComputedContent);
+  @computed("selection")
+  hasSelection(selection) {
+    return (
+      selection !== this.get("noneRowComputedContent") && !isNone(selection)
+    );
   },
 
-  @computed("filter", "computedValue")
-  shouldDisplayCreateRow(filter, computedValue) {
+  @computed(
+    "computedValue",
+    "filter",
+    "collectionComputedContent.[]",
+    "hasReachedMaximum",
+    "hasReachedMinimum"
+  )
+  shouldDisplayCreateRow(computedValue, filter) {
     return this._super() && computedValue !== filter;
   },
 
   autoHighlight() {
     run.schedule("afterRender", () => {
-      if (!isNone(this.get("highlightedValue"))) { return; }
-
-      const filteredComputedContent = this.get("filteredComputedContent");
-      const displayCreateRow = this.get("shouldDisplayCreateRow");
-      const none = this.get("noneRowComputedContent");
-
-      if (this.get("hasSelection") && isEmpty(this.get("filter"))) {
-        this.send("highlight", this.get("selectedComputedContent"));
+      if (this.get("shouldDisplayCreateRow")) {
+        this.highlight(this.get("createRowComputedContent"));
         return;
       }
 
-      if (isNone(this.get("highlightedValue")) && !isEmpty(filteredComputedContent)) {
-        this.send("highlight", get(filteredComputedContent, "firstObject"));
+      if (
+        !isEmpty(this.get("filter")) &&
+        !isEmpty(this.get("collectionComputedContent"))
+      ) {
+        this.highlight(this.get("collectionComputedContent.firstObject"));
         return;
       }
 
-      if (displayCreateRow === true && isEmpty(filteredComputedContent)) {
-        this.send("highlight", this.get("createRowComputedContent"));
+      if (
+        !this.get("isAsync") &&
+        this.get("hasSelection") &&
+        isEmpty(this.get("filter"))
+      ) {
+        this.highlight(get(makeArray(this.get("selection")), "firstObject"));
+        return;
       }
-      else if (!isEmpty(filteredComputedContent)) {
-        this.send("highlight", get(filteredComputedContent, "firstObject"));
+
+      if (
+        !this.get("isAsync") &&
+        !this.get("hasSelection") &&
+        isEmpty(this.get("filter")) &&
+        !isEmpty(this.get("collectionComputedContent"))
+      ) {
+        this.highlight(this.get("collectionComputedContent.firstObject"));
+        return;
       }
-      else if (isEmpty(filteredComputedContent) && isPresent(none) && displayCreateRow === false) {
-        this.send("highlight", none);
+
+      if (isPresent(this.get("noneRowComputedContent"))) {
+        this.highlight(this.get("noneRowComputedContent"));
+        return;
       }
     });
   },
 
-  validateComputedContentItem(computedContentItem) {
-    return this.get("computedValue") !== computedContentItem.value;
-  },
+  select(computedContentItem) {
+    if (
+      !computedContentItem ||
+      computedContentItem.__sk_row_type === "noneRow"
+    ) {
+      this.clearSelection();
+      return;
+    }
 
-  actions: {
-    clearSelection() {
-      this.send("deselect", this.get("selectedComputedContent"));
-      this._boundaryActionHandler("onClearSelection");
-    },
-
-    create(computedContentItem) {
-      if (this.validateComputedContentItem(computedContentItem)) {
+    if (computedContentItem.__sk_row_type === "createRow") {
+      if (
+        this.get("computedValue") !== computedContentItem.value &&
+        this.validateCreate(computedContentItem.value)
+      ) {
+        this.willCreate(computedContentItem);
+        computedContentItem.__sk_row_type = null;
         this.get("computedContent").pushObject(computedContentItem);
-        this._boundaryActionHandler("onCreate");
-        this.send("select", computedContentItem);
+
+        run.schedule("afterRender", () => {
+          this.didCreate(computedContentItem);
+          this._boundaryActionHandler("onCreate");
+        });
+
+        this.select(computedContentItem);
+        return;
       } else {
         this._boundaryActionHandler("onCreateFailure");
+        return;
       }
-    },
-
-    select(rowComputedContentItem) {
-      this.willSelect(rowComputedContentItem);
-      this.set("computedValue", rowComputedContentItem.value);
-      this.mutateAttributes();
-      run.schedule("afterRender", () => this.didSelect(rowComputedContentItem));
-    },
-
-    deselect(rowComputedContentItem) {
-      this.willDeselect(rowComputedContentItem);
-      this.set("computedValue", null);
-      this.mutateAttributes();
-      run.schedule("afterRender", () => this.didDeselect(rowComputedContentItem));
     }
+
+    if (this.validateSelect(computedContentItem)) {
+      this.willSelect(computedContentItem);
+      this.clearFilter();
+      this.setProperties({
+        highlighted: null,
+        computedValue: computedContentItem.value
+      });
+
+      run.next(() => this.mutateAttributes());
+
+      run.schedule("afterRender", () => {
+        this.didSelect(computedContentItem);
+
+        applyOnSelectPluginApiCallbacks(
+          this.get("pluginApiIdentifiers"),
+          computedContentItem.value,
+          this
+        );
+
+        this._boundaryActionHandler("onSelect", computedContentItem.value);
+
+        this.autoHighlight();
+      });
+    } else {
+      this._boundaryActionHandler("onSelectFailure");
+    }
+  },
+
+  deselect(computedContentItem) {
+    makeArray(computedContentItem).forEach(item => {
+      this.willDeselect(item);
+
+      this.clearFilter();
+
+      this.setProperties({
+        computedValue: null,
+        highlighted: null,
+        highlightedSelection: []
+      });
+
+      run.next(() => this.mutateAttributes());
+      run.schedule("afterRender", () => {
+        this.didDeselect(item);
+        this._boundaryActionHandler("onDeselect", item);
+        this.autoHighlight();
+      });
+    });
   }
 });

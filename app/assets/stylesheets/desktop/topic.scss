@@ -2,6 +2,7 @@
   @include unselectable;
   clear: both;
   text-align: right;
+  margin-bottom: 10px;
   .post-action {
     display: inline-block;
     margin-left: 10px;
@@ -13,29 +14,31 @@
   margin: 20px 0;
 }
 
-.edits {margin-right: 5px;}
-
 #topic-title {
   z-index: z("base");
   padding-top: 14px;
   margin-bottom: 10px;
 
-  #edit-title, .category-chooser, .edit-controls {
+  #edit-title,
+  .category-chooser,
+  .edit-controls {
     width: 500px;
   }
   h1 {
     font-size: $font-up-4;
     line-height: $line-height-medium;
     overflow: hidden;
-    a {color: $primary;}
+    width: 100%;
+    a {
+      color: $primary;
+    }
   }
   .topic-statuses {
     margin-top: -2px;
   }
-  .select2-container {
-    vertical-align: middle;
+  .private-message-glyph {
+    display: none;
   }
-  .private-message-glyph { display: none; }
   .remove-featured-link {
     float: right;
     text-transform: lowercase;
@@ -45,11 +48,12 @@
 }
 
 .private-message-glyph {
-  color: dark-light-choose($primary-low-mid, $secondary-high);
   float: left;
-  margin-right: 5px;
 }
-.private_message #topic-title .private-message-glyph { display: inline; }
+
+.private_message #topic-title .private-message-glyph {
+  display: inline;
+}
 
 .topic-error {
   padding: 18px;
@@ -70,15 +74,14 @@
 
 .topic-status-info {
   border-top: 1px solid $primary-low;
-  padding: 10px 0px;
+  padding: 10px 0;
   height: 20px;
   max-width: 757px;
 }
 
 #topic-progress-wrapper {
   position: fixed;
-  right: 50%;
-  width: 0;
+  right: 1em;
   bottom: 0;
   z-index: z("timeline");
   &.docked {
@@ -95,7 +98,6 @@
   position: relative;
   left: 340px;
   width: 135px;
-  padding: 5px;
 
   button.full {
     width: 100%;
@@ -172,20 +174,12 @@
     top: 0;
     bottom: 0;
     width: 0;
-    border-right: 1px solid  $tertiary-low;
-    background-color:  $tertiary-low;
-    transition: width .75s;
+    max-width: 145px;
+    border-right: 1px solid $tertiary-low;
+    background-color: $tertiary-low;
+    transition: width 0.75s;
   }
 }
-
-.heatmap-high {color: #fe7a15 !important;}
-.heatmap-med {color: #cf7721 !important;}
-.heatmap-low {color: #9b764f !important;}
-.heatmap-high a {color: #fe7a15 !important;}
-.heatmap-med a {color: #cf7721 !important;}
-.heatmap-low a {color: #9b764f !important;}
-
-
 
 #topic-filter {
   background-color: $highlight-medium;
@@ -197,10 +191,9 @@
   z-index: z("dropdown");
 }
 
-@media all
-and (min-width: 400px) {
-
-  #topic-progress, #topic-progress-expanded {
+@media all and (min-width: 400px) {
+  #topic-progress,
+  #topic-progress-expanded {
     right: 0;
     left: 0;
   }
@@ -218,13 +211,10 @@ and (min-width: 400px) {
   }
 }
 
-@media all
-and (max-width : 485px) {
-
+@media all and (max-width: 485px) {
   #topic-progress-wrapper.docked {
     display: none;
   }
-
 
   #topic-footer-main-buttons {
     max-width: 100%;

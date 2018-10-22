@@ -27,7 +27,7 @@ end
 Rails.application.eager_load!
 MODELS = ActiveRecord::Base.descendants.each { |m|
   begin
-    m.send(:load_schema) unless m.abstract_class?
+    m.send(:load_schema) unless m.abstract_class? 
   rescue
     puts "#{m} didn't work"
   end }
@@ -111,6 +111,7 @@ RDL.type UsernameValidator, :valid_format?, '() -> %bool', wrap: false
 RDL.type Group, 'self.visibility_levels', '() -> Hash<Symbol, Integer>', wrap: false
 RDL.type Theme, :included_themes, '() -> Array<Theme>', wrap: false
 RDL.type SiteSetting, 'self.embed_truncate?', '() -> %bool', wrap: false
+RDL.type MiniSqlMultisiteConnection, 'exec', "(String) -> %any", wrap: false
 
 ## rails library method types
 RDL.type ActiveRecord::AttributeMethods::ClassMethods, 'attribute_names', '() -> Array<String>', wrap: :false
@@ -125,12 +126,13 @@ RDL.type ActiveRecord::Base, 'self.exec_sql', '(String) -> %bool', wrap: false
 RDL.type ActiveRecord::Base, 'self.reset_counters', '(Integer, Symbol) -> Integer', wrap: false
 
 ## checked types
+
 RDL.type User, 'self.new_from_params', '({ name: String, email: String, password: String, username: String }) -> User', typecheck: :later, wrap: false
 RDL.type User, 'self.find_by_username', '(String) -> User', typecheck: :later, wrap: false
 RDL.type User, :featured_user_badges, '(?Integer) -> %any', typecheck: :later, wrap: false
 RDL.type User, :email_confirmed?, '() -> %bool', typecheck: :later, wrap: false
-RDL.type EmailToken, :active, '() -> ActiveRecord_Relation<EmailToken>', wrap: false, typecheck: :later
-RDL.type User, :activate, '() -> %bool', typecheck: :later, wrap: false
+RDL.type EmailToken, 'self.active', '() -> ActiveRecord_Relation<EmailToken>', wrap: false, typecheck: :later
+RDL.type User, :activate, '() -> %bool or nil', typecheck: :later, wrap: false
 RDL.type User, :number_of_deleted_posts, '() -> Integer', typecheck: :later, wrap: false
 # Below needs where with ActiveRecord_Relation inputs allowed
 #RDL.type User, :number_of_flagged_posts, '() -> Integer', typecheck: :later, wrap: false 
@@ -162,6 +164,7 @@ RDL.type Group, 'self.desired_trust_level_groups', '(Integer) -> Array<Integer>'
 RDL.type Group, 'self.user_trust_level_change!', '(Integer, Integer) -> Array<Integer>', typecheck: :later, wrap: false
 RDL.type Group, 'self.refresh_automatic_group!', '(Symbol) -> Group', typecheck: :later, wrap: false
 RDL.type Group, 'self.lookup_group', "(Symbol) -> Group", typecheck: :later, wrap: false
+
 # Block type checking issue for the one below
 #RDL.type Theme, :list_baked_fields, "(Symbol, Symbol) -> ActiveRecord_Relation<ThemeField>", typecheck: :later, wrap: false
 RDL.type Draft, 'self.find_draft', '(User or Integer, String) -> Draft', typecheck: :later, wrap: false
@@ -174,5 +177,8 @@ RDL.type Notification, :post, '() -> Post', typecheck: :later, wrap: false
 
 
 ## typecheck
+#t1 = Time.now
 RDL.do_typecheck :later
+#t2 = Time.now
 
+#puts "TOTAL TIME IS #{t2 - t1}"

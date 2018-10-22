@@ -4,6 +4,7 @@ require_dependency 'new_post_manager'
 class TopicViewSerializer < ApplicationSerializer
   include PostStreamSerializerMixin
   include SuggestedTopicsMixin
+  include TopicTagsMixin
   include ApplicationHelper
 
   def self.attributes_from_topic(*list)
@@ -35,7 +36,6 @@ class TopicViewSerializer < ApplicationSerializer
                         :deleted_at,
                         :pending_posts_count,
                         :user_id,
-                        :pm_with_non_human_user?,
                         :featured_link,
                         :featured_link_root_domain,
                         :pinned_globally,
@@ -49,6 +49,7 @@ class TopicViewSerializer < ApplicationSerializer
              :unpinned,
              :pinned,
              :details,
+             :current_post_number,
              :highest_post_number,
              :last_read_post_number,
              :last_read_post_id,
@@ -60,12 +61,13 @@ class TopicViewSerializer < ApplicationSerializer
              :chunk_size,
              :bookmarked,
              :message_archived,
-             :tags,
              :topic_timer,
              :private_topic_timer,
              :unicode_title,
              :message_bus_last_id,
-             :participant_count
+             :participant_count,
+             :destination_category_id,
+             :pm_with_non_human_user
 
   # TODO: Split off into proper object / serializer
   def details
@@ -171,15 +173,21 @@ class TopicViewSerializer < ApplicationSerializer
     object.topic_user.present?
   end
 
+  def current_post_number
+    [object.post_number, object.highest_post_number].min
+  end
+
+  def include_current_post_number?
+    object.highest_post_number.present?
+  end
+
   def highest_post_number
     object.highest_post_number
   end
 
   def last_read_post_id
-    return nil unless object.filtered_post_stream && last_read_post_number
-    object.filtered_post_stream.each do |ps|
-      return ps[0] if ps[1] === last_read_post_number
-    end
+    return nil unless last_read_post_number
+    object.filtered_post_id(last_read_post_number)
   end
   alias_method :include_last_read_post_id?, :has_topic_user?
 
@@ -238,10 +246,6 @@ class TopicViewSerializer < ApplicationSerializer
     scope.is_staff? && NewPostManager.queue_enabled?
   end
 
-  def include_tags?
-    SiteSetting.tagging_enabled
-  end
-
   def topic_timer
     TopicTimerSerializer.new(object.topic.public_topic_timer, root: false)
   end
@@ -253,10 +257,6 @@ class TopicViewSerializer < ApplicationSerializer
   def private_topic_timer
     timer = object.topic.private_topic_timer(scope.user)
     TopicTimerSerializer.new(timer, root: false)
-  end
-
-  def tags
-    object.topic.tags.map(&:name)
   end
 
   def include_featured_link?
@@ -279,14 +279,28 @@ class TopicViewSerializer < ApplicationSerializer
     private_message?(object.topic)
   end
 
+  def pm_with_non_human_user
+    object.topic.pm_with_non_human_user?
+  end
+
   def participant_count
     object.participant_count
   end
 
+  def destination_category_id
+    object.topic.shared_draft.category_id
+  end
+
+  def include_destination_category_id?
+    scope.can_create_shared_draft? &&
+      object.topic.category_id == SiteSetting.shared_drafts_category.to_i &&
+      object.topic.shared_draft.present?
+  end
+
   private
 
-    def private_message?(topic)
-      @private_message ||= topic.private_message?
-    end
+  def private_message?(topic)
+    @private_message ||= topic.private_message?
+  end
 
 end

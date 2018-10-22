@@ -139,7 +139,7 @@ class Invite < ActiveRecord::Base
       end
     else
       if topic && topic.category && Guardian.new(invited_by).can_invite_to?(topic)
-        group_ids = topic.category.groups.pluck(:id) - invite.invited_groups.pluck(:group_id)
+        group_ids = topic.category.groups.where(automatic: false).pluck(:id) - invite.invited_groups.pluck(:group_id)
         group_ids.each { |group_id| invite.invited_groups.create!(group_id: group_id) }
       end
     end
@@ -166,13 +166,14 @@ class Invite < ActiveRecord::Base
     group_ids
   end
 
+  INVITE_ORDER = <<~SQL
+  SQL
+
   def self.find_all_invites_from(inviter, offset = 0, limit = SiteSetting.invites_per_page)
     Invite.where(invited_by_id: inviter.id)
       .where('invites.email IS NOT NULL')
       .includes(user: :user_stat)
-      .order('CASE WHEN invites.user_id IS NOT NULL THEN 0 ELSE 1 END',
-                 'user_stats.time_read DESC',
-                 'invites.redeemed_at DESC')
+      .order("CASE WHEN invites.user_id IS NOT NULL THEN 0 ELSE 1 END, user_stats.time_read DESC, invites.redeemed_at DESC")
       .limit(limit)
       .offset(offset)
       .references('user_stats')
@@ -262,7 +263,7 @@ end
 #
 #  id             :integer          not null, primary key
 #  invite_key     :string(32)       not null
-#  email          :string(255)
+#  email          :string
 #  invited_by_id  :integer          not null
 #  user_id        :integer
 #  redeemed_at    :datetime

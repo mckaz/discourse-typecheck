@@ -1,4 +1,5 @@
 import MultiSelectComponent from "select-kit/components/multi-select";
+const { isNone, makeArray } = Ember;
 
 export default MultiSelectComponent.extend({
   pluginApiIdentifiers: ["list-setting"],
@@ -11,26 +12,29 @@ export default MultiSelectComponent.extend({
   init() {
     this._super();
 
-    if (!Ember.isNone(this.get("settingName"))) {
+    if (!isNone(this.get("settingName"))) {
       this.set("nameProperty", this.get("settingName"));
     }
 
     if (this.get("nameProperty").indexOf("color") > -1) {
-      this.set("headerComponentOptions", Ember.Object.create({
-        selectedNameComponent: "multi-select/selected-color"
-      }));
+      this.set(
+        "headerComponentOptions",
+        Ember.Object.create({
+          selectedNameComponent: "multi-select/selected-color"
+        })
+      );
     }
   },
 
   computeContent() {
     let content;
-    if (Ember.isNone(this.get("choices"))) {
-      content = this.get("settingValue").split(this.get("tokenSeparator"));;
-    }  else {
+    if (isNone(this.get("choices"))) {
+      content = this.get("settingValue").split(this.get("tokenSeparator"));
+    } else {
       content = this.get("choices");
     }
 
-    return Ember.makeArray(content).filter(c => c);
+    return makeArray(content).filter(c => c);
   },
 
   mutateValues(values) {
@@ -39,8 +43,8 @@ export default MultiSelectComponent.extend({
 
   computeValues() {
     return this.get("settingValue")
-               .split(this.get("tokenSeparator"))
-               .filter(c => c);
+      .split(this.get("tokenSeparator"))
+      .filter(c => c);
   },
 
   _handleTabOnKeyDown(event) {

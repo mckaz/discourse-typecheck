@@ -1,5 +1,16 @@
 # frozen_string_literal: true
 
+begin
+  if !RUBY_VERSION.match?(/^2\.[456]/)
+    STDERR.puts "Discourse requires Ruby 2.4.0 or up"
+    exit 1
+  end
+rescue
+  # no String#match?
+  STDERR.puts "Discourse requires Ruby 2.4.0 or up"
+  exit 1
+end
+
 require File.expand_path('../boot', __FILE__)
 require 'rails/all'
 
@@ -75,6 +86,11 @@ module Discourse
 
     config.assets.paths += %W(#{config.root}/config/locales #{config.root}/public/javascripts)
 
+    if Rails.env == "development" || Rails.env == "test"
+      config.assets.paths << "#{config.root}/test/javascripts"
+      config.assets.paths << "#{config.root}/test/stylesheets"
+    end
+
     # Allows us to skip minifincation on some files
     config.assets.skip_minification = []
 
@@ -100,8 +116,10 @@ module Discourse
     }
 
     # Precompile all available locales
-    Dir.glob("#{config.root}/app/assets/javascripts/locales/*.js.erb").each do |file|
-      config.assets.precompile << "locales/#{file.match(/([a-z_A-Z]+\.js)\.erb$/)[1]}"
+    unless GlobalSetting.try(:omit_base_locales)
+      Dir.glob("#{config.root}/app/assets/javascripts/locales/*.js.erb").each do |file|
+        config.assets.precompile << "locales/#{file.match(/([a-z_A-Z]+\.js)\.erb$/)[1]}"
+      end
     end
 
     # out of the box sprockets 3 grabs loose files that are hanging in assets,
@@ -129,13 +147,14 @@ module Discourse
 
     # Configure sensitive parameters which will be filtered from the log file.
     config.filter_parameters += [
-        :password,
-        :pop3_polling_password,
-        :api_key,
-        :s3_secret_access_key,
-        :twitter_consumer_secret,
-        :facebook_app_secret,
-        :github_client_secret
+      :password,
+      :pop3_polling_password,
+      :api_key,
+      :s3_secret_access_key,
+      :twitter_consumer_secret,
+      :facebook_app_secret,
+      :github_client_secret,
+      :second_factor_token,
     ]
 
     # Enable the asset pipeline
@@ -253,13 +272,9 @@ module Discourse
       g.test_framework :rspec, fixture: false
     end
 
-  end
-end
+    # we have a monkey_patch we need to require early... prior to connection
+    # init
+    require 'freedom_patches/reaper'
 
-if defined?(PhusionPassenger)
-  PhusionPassenger.on_event(:starting_worker_process) do |forked|
-    if forked
-      Discourse.after_fork
-    end
   end
 end

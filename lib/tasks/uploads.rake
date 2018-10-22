@@ -117,51 +117,53 @@ def migrate_from_s3
     return
   end
 
-  # make sure S3 bucket is set
-  if SiteSetting.Upload.s3_upload_bucket.blank?
-    puts "The S3 upload bucket must be set before running that task."
-    return
-  end
-
   db = RailsMultisite::ConnectionManagement.current_db
 
   puts "Migrating uploads from S3 to local storage for '#{db}'..."
 
-  s3_base_url = FileStore::S3Store.new.absolute_base_url
   max_file_size_kb = [SiteSetting.max_image_size_kb, SiteSetting.max_attachment_size_kb].max.kilobytes
 
-  Post.unscoped.find_each do |post|
-    if post.raw[s3_base_url]
-      post.raw.scan(/(#{Regexp.escape(s3_base_url)}\/(\d+)(\h{40})\.\w+)/).each do |url, id, sha|
+  Post.where("user_id > 0 AND raw LIKE '%.s3%.amazonaws.com/%'").find_each do |post|
+    begin
+      updated = false
+
+      post.raw.gsub!(/(\/\/[\w.-]+amazonaws\.com\/(original|optimized)\/([a-z0-9]+\/)+\h{40}([\w.-]+)?)/i) do |url|
         begin
-          puts "POST ID: #{post.id}"
-          puts "UPLOAD ID: #{id}"
-          puts "UPLOAD SHA: #{sha}"
-          puts "UPLOAD URL: #{url}"
           if filename = guess_filename(url, post.raw)
-            puts "FILENAME: #{filename}"
-            file = FileHelper.download(
-              "http:#{url}",
-              max_file_size: 20.megabytes,
-              tmp_file_name: "from_s3",
-              follow_redirect: true
-            )
-            if upload = UploadCreator.new(file, filename).create_for(post.user_id || -1)
-              post.raw = post.raw.gsub(/(https?:)?#{Regexp.escape(url)}/, upload.url)
-              post.save
-              post.rebake!
-              puts "OK :)"
-            else
-              puts "KO :("
+            file = FileHelper.download("http:#{url}", max_file_size: 20.megabytes, tmp_file_name: "from_s3", follow_redirect: true)
+            sha1 = Upload.generate_digest(file)
+            origin = nil
+
+            existing_upload = Upload.find_by(sha1: sha1)
+            if existing_upload&.url&.start_with?("//")
+              filename = existing_upload.original_filename
+              origin = existing_upload.origin
+              existing_upload.destroy
             end
-            puts post.full_url, ""
-          else
-            puts "NO FILENAME :("
+
+            new_upload = UploadCreator.new(file, filename, origin: origin).create_for(post.user_id || -1)
+            if new_upload&.save
+              updated = true
+              url = new_upload.url
+            end
           end
-        rescue => e
-          puts "EXCEPTION: #{e.message}"
+
+          url
+        rescue
+          url
         end
       end
+
+      if updated
+        post.save!
+        post.rebake!
+        putc "#"
+      else
+        putc "."
+      end
+
+    rescue
+      putc "X"
     end
   end
 
@@ -339,15 +341,15 @@ end
 # list all missing uploads and optimized images
 task "uploads:missing" => :environment do
   if ENV["RAILS_DB"]
-    list_missing_uploads
+    list_missing_uploads(skip_optimized: ENV['SKIP_OPTIMIZED'])
   else
     RailsMultisite::ConnectionManagement.each_connection do |db|
-      list_missing_uploads
+      list_missing_uploads(skip_optimized: ENV['SKIP_OPTIMIZED'])
     end
   end
 end
 
-def list_missing_uploads
+def list_missing_uploads(skip_optimized: false)
   if Discourse.store.external?
     puts "This task only works for internal storages."
     return
@@ -370,20 +372,21 @@ def list_missing_uploads
     puts path if bad
   end
 
-  OptimizedImage.find_each do |optimized_image|
+  unless skip_optimized
+    OptimizedImage.find_each do |optimized_image|
+      # remote?
+      next unless optimized_image.url =~ /^\/[^\/]/
 
-    # remote?
-    next unless optimized_image.url =~ /^\/[^\/]/
+      path = "#{public_directory}#{optimized_image.url}"
 
-    path = "#{public_directory}#{optimized_image.url}"
-
-    bad = true
-    begin
-      bad = false if File.size(path) != 0
-    rescue
-      # something is messed up
+      bad = true
+      begin
+        bad = false if File.size(path) != 0
+      rescue
+        # something is messed up
+      end
+      puts path if bad
     end
-    puts path if bad
   end
 end
 
@@ -406,8 +409,14 @@ def recover_from_tombstone
   end
 
   begin
-    original_setting = SiteSetting.max_image_size_kb
-    SiteSetting.max_image_size_kb = 10240
+    previous_image_size      = SiteSetting.max_image_size_kb
+    previous_attachment_size = SiteSetting.max_attachment_size_kb
+    previous_extensions      = SiteSetting.authorized_extensions
+
+    SiteSetting.max_image_size_kb      = 10 * 1024
+    SiteSetting.max_attachment_size_kb = 10 * 1024
+    SiteSetting.authorized_extensions  = "*"
+
     current_db = RailsMultisite::ConnectionManagement.current_db
     public_path = Rails.root.join("public")
     paths = Dir.glob(File.join(public_path, 'uploads', 'tombstone', current_db, '**', '*.*'))
@@ -421,9 +430,10 @@ def recover_from_tombstone
         doc = Nokogiri::HTML::fragment(post.raw)
         updated = false
 
-        doc.css("img[src]").each do |img|
-          url = img["src"]
+        image_urls = doc.css("img[src]").map { |img| img["src"] }
+        attachment_urls = doc.css("a.attachment[href]").map { |a| a["href"] }
 
+        (image_urls + attachment_urls).each do |url|
           next if !url.start_with?("/uploads/")
           next if Upload.exists?(url: url)
 
@@ -470,7 +480,9 @@ def recover_from_tombstone
       end
     end
   ensure
-    SiteSetting.max_image_size_kb = original_setting
+    SiteSetting.max_image_size_kb      = previous_image_size
+    SiteSetting.max_attachment_size_kb = previous_attachment_size
+    SiteSetting.authorized_extensions  = previous_extensions
   end
 end
 
@@ -664,7 +676,7 @@ task "uploads:analyze", [:cache_path, :limit] => :environment do |_, args|
   printf "%-25s | %-25s | %-25s | %-25s\n", 'username', 'total size of uploads', 'number of uploads', 'number of optimized images'
   puts "-" * 110
 
-  User.exec_sql(sql).values.each do |username, num_of_uploads, total_size_of_uploads, num_of_optimized_images|
+  DB.query_single(sql).each do |username, num_of_uploads, total_size_of_uploads, num_of_optimized_images|
     printf "%-25s | %-25s | %-25s | %-25s\n", username, helper.number_to_human_size(total_size_of_uploads), num_of_uploads, num_of_optimized_images
   end
 

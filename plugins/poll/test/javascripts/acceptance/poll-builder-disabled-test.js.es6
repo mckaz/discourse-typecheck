@@ -1,6 +1,5 @@
-import { acceptance } from "helpers/qunit-helpers";
+import { acceptance, replaceCurrentUser } from "helpers/qunit-helpers";
 import { displayPollBuilderButton } from "discourse/plugins/poll/helpers/display-poll-builder-button";
-import { replaceCurrentUser } from "discourse/plugins/poll/helpers/replace-current-user";
 import { clearPopupMenuOptionsCallback } from "discourse/controllers/composer";
 
 acceptance("Poll Builder - polls are disabled", {
@@ -14,32 +13,41 @@ acceptance("Poll Builder - polls are disabled", {
   }
 });
 
-test("regular user - sufficient trust level", (assert) => {
+test("regular user - sufficient trust level", assert => {
   replaceCurrentUser({ staff: false, trust_level: 3 });
 
   displayPollBuilderButton();
 
   andThen(() => {
-    assert.ok(!exists(".select-kit-row[title='Build Poll']"), "it hides the builder button");
+    assert.ok(
+      !exists(".select-kit-row[title='Build Poll']"),
+      "it hides the builder button"
+    );
   });
 });
 
-test("regular user - insufficient trust level", (assert) => {
+test("regular user - insufficient trust level", assert => {
   replaceCurrentUser({ staff: false, trust_level: 1 });
 
   displayPollBuilderButton();
 
   andThen(() => {
-    assert.ok(!exists(".select-kit-row[title='Build Poll']"), "it hides the builder button");
+    assert.ok(
+      !exists(".select-kit-row[title='Build Poll']"),
+      "it hides the builder button"
+    );
   });
 });
 
-test("staff", (assert) => {
+test("staff", assert => {
   replaceCurrentUser({ staff: true });
 
   displayPollBuilderButton();
 
   andThen(() => {
-    assert.ok(!exists(".select-kit-row[title='Build Poll']"), "it hides the builder button");
+    assert.ok(
+      !exists(".select-kit-row[title='Build Poll']"),
+      "it hides the builder button"
+    );
   });
 });

@@ -18,9 +18,14 @@
 
         h2.selected-name {
           overflow: auto;
-          color: black;
+          color: $secondary;
           display: inline-block;
           box-sizing: border-box;
+
+          .date-section {
+            color: $primary;
+            margin-right: 5px;
+          }
 
           .top-date-string {
             font-size: $font-down-1;
@@ -31,13 +36,14 @@
         }
 
         .d-icon {
-          color: black;
+          color: $primary;
           opacity: 1;
           margin: 5px 0 10px 5px;
           font-size: $font-up-3;
         }
 
-        &.is-focused, &:hover {
+        &.is-focused,
+        &:hover {
           background: none;
           border: none;
           outline: none;
@@ -47,13 +53,16 @@
       .period-chooser-row {
         font-weight: bold;
         padding: 5px;
-        color: #222;
         font-size: $font-up-1;
         align-items: center;
         display: flex;
 
         .period-title {
           flex: 1;
+        }
+
+        .date-section {
+          color: $primary;
         }
 
         .top-date-string {

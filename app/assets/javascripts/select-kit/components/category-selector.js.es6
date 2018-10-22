@@ -9,6 +9,7 @@ export default MultiSelectComponent.extend({
   rowComponent: "category-row",
   categories: null,
   blacklist: null,
+  allowUncategorized: true,
 
   init() {
     this._super();
@@ -21,6 +22,7 @@ export default MultiSelectComponent.extend({
     });
 
     this.get("rowComponentOptions").setProperties({
+      allowUncategorized: this.get("allowUncategorized"),
       displayCategoryDescription: false
     });
   },
@@ -34,15 +36,19 @@ export default MultiSelectComponent.extend({
   },
 
   filterComputedContent(computedContent, computedValues, filter) {
-    const regex = new RegExp(filter.toLowerCase(), 'i');
-    return computedContent.filter(category => Ember.get(category, "name").match(regex));
+    const regex = new RegExp(filter, "i");
+    return computedContent.filter(category =>
+      this._normalize(Ember.get(category, "name")).match(regex)
+    );
   },
 
   computeContent() {
     const blacklist = Ember.makeArray(this.get("blacklist"));
     return Category.list().filter(category => {
-      return this.get("categories").includes(category) ||
-             !blacklist.includes(category);
+      return (
+        this.get("categories").includes(category) ||
+        !blacklist.includes(category)
+      );
     });
   }
 });

@@ -45,6 +45,74 @@ describe Middleware::AnonymousCache::Helper do
     end
   end
 
+  context 'force_anonymous!' do
+    before do
+      RateLimiter.enable
+    end
+
+    after do
+      RateLimiter.disable
+    end
+
+    it 'will revert to anonymous once we reach the limit' do
+
+      RateLimiter.clear_all!
+
+      is_anon = false
+
+      app = Middleware::AnonymousCache.new(
+        lambda do |env|
+          is_anon = env["HTTP_COOKIE"].nil?
+          [200, {}, ["ok"]]
+        end
+      )
+
+      global_setting :force_anonymous_min_per_10_seconds, 2
+      global_setting :force_anonymous_min_queue_seconds, 1
+
+      env = {
+        "HTTP_COOKIE" => "_t=#{SecureRandom.hex}",
+        "HOST" => "site.com",
+        "REQUEST_METHOD" => "GET",
+        "REQUEST_URI" => "/somewhere/rainbow",
+        "REQUEST_QUEUE_SECONDS" => 2.1,
+        "rack.input" => StringIO.new
+      }
+
+      is_anon = false
+      app.call(env.dup)
+      expect(is_anon).to eq(false)
+
+      is_anon = false
+      app.call(env.dup)
+      expect(is_anon).to eq(false)
+
+      is_anon = false
+      app.call(env.dup)
+      expect(is_anon).to eq(true)
+
+      is_anon = false
+      _status, headers, _body = app.call(env.dup)
+      expect(is_anon).to eq(true)
+      expect(headers['Set-Cookie']).to eq('dosp=1; Path=/')
+
+      # tricky change, a 50ms delay still will trigger protection
+      # once it is tripped
+
+      env["REQUEST_QUEUE_SECONDS"] = 0.05
+      is_anon = false
+
+      app.call(env.dup)
+      expect(is_anon).to eq(true)
+
+      is_anon = false
+      env["REQUEST_QUEUE_SECONDS"] = 0.01
+
+      app.call(env.dup)
+      expect(is_anon).to eq(false)
+    end
+  end
+
   context "cached" do
     let!(:helper) do
       new_helper("ANON_CACHE_DURATION" => 10)
@@ -81,6 +149,93 @@ describe Middleware::AnonymousCache::Helper do
       expect(crawler.cached).to eq(nil)
       crawler.cache([200, { "HELLO" => "WORLD" }, ["hello ", "world"]])
       expect(crawler.cached).to eq([200, { "X-Discourse-Cached" => "true", "HELLO" => "WORLD" }, ["hello world"]])
+    end
+  end
+
+  context "crawler blocking" do
+    let :non_crawler do
+      {
+        "HTTP_USER_AGENT" =>
+        "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36"
+      }
+    end
+
+    def get(path, options)
+      middleware = Middleware::AnonymousCache.new(lambda { |_| [200, {}, []] })
+      @env = env({
+        "REQUEST_URI" => path,
+        "PATH_INFO" => path,
+        "REQUEST_PATH" => path
+      }.merge(options[:headers]))
+      @status = middleware.call(@env).first
+    end
+
+    it "applies whitelisted_crawler_user_agents correctly" do
+      SiteSetting.whitelisted_crawler_user_agents = 'Googlebot'
+
+      get '/srv/status', headers: {
+        'HTTP_USER_AGENT' => 'Googlebot/2.1 (+http://www.google.com/bot.html)'
+      }
+
+      expect(@status).to eq(200)
+
+      get '/srv/status', headers: {
+        'HTTP_USER_AGENT' => 'Anotherbot/2.1 (+http://www.notgoogle.com/bot.html)'
+      }
+
+      expect(@status).to eq(403)
+
+      get '/srv/status', headers: non_crawler
+      expect(@status).to eq(200)
+    end
+
+    it "applies blacklisted_crawler_user_agents correctly" do
+      SiteSetting.blacklisted_crawler_user_agents = 'Googlebot'
+
+      get '/srv/status', headers: non_crawler
+      expect(@status).to eq(200)
+
+      get '/srv/status', headers: {
+        'HTTP_USER_AGENT' => 'Googlebot/2.1 (+http://www.google.com/bot.html)'
+      }
+
+      expect(@status).to eq(403)
+
+      get '/srv/status', headers: {
+        'HTTP_USER_AGENT' => 'Twitterbot/2.1 (+http://www.notgoogle.com/bot.html)'
+      }
+
+      expect(@status).to eq(200)
+    end
+
+    it "should never block robots.txt" do
+      SiteSetting.blacklisted_crawler_user_agents = 'Googlebot'
+
+      get '/robots.txt', headers: {
+        'HTTP_USER_AGENT' => 'Googlebot/2.1 (+http://www.google.com/bot.html)'
+      }
+
+      expect(@status).to eq(200)
+    end
+
+    it "blocked crawlers shouldn't log page views" do
+      SiteSetting.blacklisted_crawler_user_agents = 'Googlebot'
+
+      get '/srv/status', headers: {
+        'HTTP_USER_AGENT' => 'Googlebot/2.1 (+http://www.google.com/bot.html)'
+      }
+
+      expect(@env["discourse.request_tracker.skip"]).to eq(true)
+    end
+
+    it "blocks json requests" do
+      SiteSetting.blacklisted_crawler_user_agents = 'Googlebot'
+
+      get '/srv/status.json', headers: {
+        'HTTP_USER_AGENT' => 'Googlebot/2.1 (+http://www.google.com/bot.html)'
+      }
+
+      expect(@status).to eq(403)
     end
   end
 

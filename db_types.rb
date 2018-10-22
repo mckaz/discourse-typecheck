@@ -357,15 +357,16 @@ class DBType
 
   def self.exists_input_type(trec, targs)
     raise "Unexpected number of arguments to ActiveRecord::Base#exists?." unless targs.size <= 1
-    return RDL::Globals.types[:top] if targs[0].nil? ## no args provided, this type won't be looked at
+    #return RDL::Globals.types[:top] if targs[0].nil? ## no args provided, this type won't be looked at
     case targs[0]
     when RDL::Type::FiniteHashType
-      return rec_to_schema_type(trec, false)
+     typ = rec_to_schema_type(trec, false)
     else
       ## any type can be accepted, only thing we're intersted in is when a hash is given
       ## TODO: what if we get a nominal Hash type?
-      return targs[0]
+      typ = targs[0]
     end
+    return RDL::Type::OptionalType.new(RDL::Type::UnionType.new(RDL::Globals.types[:integer], RDL::Globals.types[:string], typ))
   end
 
 
@@ -562,7 +563,7 @@ class DBType
           typs << RDL::Type::SingletonType.new(k)
         end
       }
-      return RDL::Type::UnionType.new(*typs)    
+      return RDL::Type::OptionalType.new(RDL::Type::UnionType.new(*typs))
     end
 
 end

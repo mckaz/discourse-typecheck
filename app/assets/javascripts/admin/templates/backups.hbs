@@ -1,13 +1,11 @@
 <div class='admin-backups'>
   <div class="admin-controls">
-    <div class="span15">
+    <nav>
       <ul class="nav nav-pills">
         {{nav-item route='admin.backups.index' label='admin.backups.menu.backups'}}
         {{nav-item route='admin.backups.logs' label='admin.backups.menu.logs'}}
         {{plugin-outlet name="downloader" tagName=""}}
-      </ul>
-    </div>
-    <div class="pull-right">
+         <div class="backup-operations">
       {{#if model.canRollback}}
         {{d-button action="rollback"
                    class="btn-rollback"
@@ -30,6 +28,10 @@
                    icon="rocket"}}
       {{/if}}
     </div>
+      </ul>
+    
+    </nav>
+
   </div>
 
   <div class="admin-container">

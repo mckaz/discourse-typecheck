@@ -94,6 +94,8 @@ class StaticController < ApplicationController
     redirect_to destination
   end
 
+  FAVICON ||= -"favicon"
+
   # We need to be able to draw our favicon on a canvas
   # and pull it off the canvas into a data uri
   # This can work by ensuring people set all the right CORS
@@ -101,16 +103,18 @@ class StaticController < ApplicationController
   # instead we cache the favicon in redis and serve it out real quick with
   # a huge expiry, we also cache these assets in nginx so it bypassed if needed
   def favicon
+    is_asset_path
 
     hijack do
-      data = DistributedMemoizer.memoize('favicon' + SiteSetting.favicon_url, 60 * 30) do
+      data = DistributedMemoizer.memoize(FAVICON + SiteSetting.favicon_url, 60 * 30) do
         begin
           file = FileHelper.download(
             SiteSetting.favicon_url,
             max_file_size: 50.kilobytes,
-            tmp_file_name: "favicon.png",
+            tmp_file_name: FAVICON,
             follow_redirect: true
           )
+          file ||= Tempfile.new([FAVICON, ".png"])
           data = file.read
           file.unlink
           data
@@ -136,22 +140,33 @@ class StaticController < ApplicationController
   end
 
   def brotli_asset
+    is_asset_path
+
     serve_asset(".br") do
       response.headers["Content-Encoding"] = 'br'
     end
   end
 
   def cdn_asset
+    is_asset_path
+
     serve_asset
   end
 
   def service_worker_asset
+    is_asset_path
+
     respond_to do |format|
       format.js do
+        # https://github.com/w3c/ServiceWorker/blob/master/explainer.md#updating-a-service-worker
+        # Maximum cache that the service worker will respect is 24 hours.
+        # However, ensure that these may be cached and served for longer on servers.
+        immutable_for 1.year
 
-        # we take 1 hour to give a new service worker to all users
-        immutable_for 1.hour
-
+        if Rails.application.assets_manifest.assets['service-worker.js']
+          path = File.expand_path(Rails.root + "public/assets/#{Rails.application.assets_manifest.assets['service-worker.js']}")
+          response.headers["Last-Modified"] = File.ctime(path).httpdate
+        end
         render(
           plain: Rails.application.assets_manifest.find_sources('service-worker.js').first,
           content_type: 'application/javascript'

@@ -1,4 +1,4 @@
-import toMarkdown from 'discourse/lib/to-markdown';
+import toMarkdown from "discourse/lib/to-markdown";
 
 QUnit.module("lib:to-markdown");
 
@@ -104,7 +104,7 @@ QUnit.test("converts table tags", assert => {
       <tbody>
         <tr><td>Lorem</td><td>ipsum</td></tr>
         <tr><td><b>dolor</b></td> <td><i>sit amet</i></td> </tr>
-        
+
         </tbody>
 </table>
   `;
@@ -119,28 +119,34 @@ QUnit.test("converts table tags", assert => {
   assert.equal(toMarkdown(html), markdown);
 });
 
-QUnit.test("returns empty string if table format not supported", assert => {
-  let html = `<table>
+QUnit.test(
+  "replace pipes with spaces if table format not supported",
+  assert => {
+    let html = `<table>
     <thead> <tr><th>Headi<br><br>ng 1</th><th>Head 2</th></tr> </thead>
       <tbody>
         <tr><td>Lorem</td><td>ipsum</td></tr>
         <tr><td><a href="http://example.com"><img src="http://dolor.com/image.png" /></a></td> <td><i>sit amet</i></td></tr></tbody>
 </table>
   `;
-  assert.equal(toMarkdown(html), "");
+    let markdown = `Headi\n\nng 1 Head 2\nLorem ipsum\n[![](http://dolor.com/image.png)](http://example.com) *sit amet*`;
+    assert.equal(toMarkdown(html), markdown);
 
-  html = `<table>
+    html = `<table>
     <thead> <tr><th>Heading 1</th></tr> </thead>
       <tbody>
         <tr><td>Lorem</td></tr>
         <tr><td><i>sit amet</i></td></tr></tbody>
 </table>
   `;
-  assert.equal(toMarkdown(html), "");
+    markdown = `Heading 1\nLorem\n*sit amet*`;
+    assert.equal(toMarkdown(html), markdown);
 
-  html = `<table><tr><td>Lorem</td><td><i>sit amet</i></td></tr></table>`;
-  assert.equal(toMarkdown(html), "");
-});
+    html = `<table><tr><td>Lorem</td><td><strong>sit amet</strong></td></tr></table>`;
+    markdown = `Lorem **sit amet**`;
+    assert.equal(toMarkdown(html), markdown);
+  }
+);
 
 QUnit.test("converts img tag", assert => {
   const url = "https://example.com/image.png";
@@ -151,10 +157,16 @@ QUnit.test("converts img tag", assert => {
   assert.equal(toMarkdown(html), `![description|50x100](${url})`);
 
   html = `<a href="http://example.com"><img src="${url}" alt="description" /></a>`;
-  assert.equal(toMarkdown(html), `[![description](${url})](http://example.com)`);
+  assert.equal(
+    toMarkdown(html),
+    `[![description](${url})](http://example.com)`
+  );
 
   html = `<a href="http://example.com">description <img src="${url}" /></a>`;
-  assert.equal(toMarkdown(html), `[description ![](${url})](http://example.com)`);
+  assert.equal(
+    toMarkdown(html),
+    `[description ![](${url})](http://example.com)`
+  );
 
   html = `<img alt="description" />`;
   assert.equal(toMarkdown(html), "");
@@ -164,7 +176,8 @@ QUnit.test("converts img tag", assert => {
 });
 
 QUnit.test("supporting html tags by keeping them", assert => {
-  let html = "Lorem <del>ipsum dolor</del> sit <big>amet, <ins>consectetur</ins></big>";
+  let html =
+    "Lorem <del>ipsum dolor</del> sit <big>amet, <ins>consectetur</ins></big>";
   let output = html;
   assert.equal(toMarkdown(html), output);
 
@@ -176,6 +189,9 @@ QUnit.test("supporting html tags by keeping them", assert => {
   assert.equal(toMarkdown(html), output);
 
   html = `Lorem <del>ipsum dolor</del> sit.`;
+  assert.equal(toMarkdown(html), html);
+
+  html = `Have you tried clicking the <kbd>Help Me!</kbd> button?`;
   assert.equal(toMarkdown(html), html);
 
   html = `Lorem <a href="http://example.com"><del>ipsum \n\n\n dolor</del> sit.</a>`;
@@ -210,11 +226,13 @@ QUnit.test("converts blockquote tag", assert => {
   let output = "> Lorem ipsum";
   assert.equal(toMarkdown(html), output);
 
-  html = "<blockquote>Lorem ipsum</blockquote><blockquote><p>dolor sit amet</p></blockquote>";
+  html =
+    "<blockquote>Lorem ipsum</blockquote><blockquote><p>dolor sit amet</p></blockquote>";
   output = "> Lorem ipsum\n\n> dolor sit amet";
   assert.equal(toMarkdown(html), output);
 
-  html = "<blockquote>\nLorem ipsum\n<blockquote><p>dolor <blockquote>sit</blockquote> amet</p></blockquote></blockquote>";
+  html =
+    "<blockquote>\nLorem ipsum\n<blockquote><p>dolor <blockquote>sit</blockquote> amet</p></blockquote></blockquote>";
   output = "> Lorem ipsum\n> > dolor\n> > > sit\n> > amet";
   assert.equal(toMarkdown(html), output);
 });
@@ -234,5 +252,65 @@ QUnit.test("converts ol list tag", assert => {
   </ol>
   `;
   const markdown = `Testing\n\n1. Item 1\n2. Item 2\n  100. Sub Item 1\n  101. Sub Item 2\n3. Item 3`;
+  assert.equal(toMarkdown(html), markdown);
+});
+
+QUnit.test("converts list tag from word", assert => {
+  const html = `Sample<!--StartFragment-->
+  <p class=MsoListParagraphCxSpFirst style='text-indent:-.25in;mso-list:l0 level1 lfo1'>
+    <![if !supportLists]>
+    <span style='font-family:Symbol;mso-fareast-font-family:Symbol;mso-bidi-font-family:  Symbol;mso-bidi-font-weight:bold'>
+      <span style='mso-list:Ignore'>·
+        <span style='font:7.0pt "Times New Roman"'> </span>
+      </span>
+    </span>
+    <![endif]>
+    <b>Item 1
+      <o:p></o:p>
+    </b>
+  </p>
+  <p class=MsoListParagraphCxSpMiddle style='text-indent:-.25in;mso-list:l0 level2 lfo1'>
+    <![if !supportLists]>
+    <span style='font-family:Symbol;mso-fareast-font-family:Symbol;mso-bidi-font-family:  Symbol;mso-bidi-font-style:italic'>
+      <span style='mso-list:Ignore'>·
+        <span style='font:7.0pt "Times New Roman"'> </span>
+      </span>
+    </span>
+    <![endif]>
+    <i>Item 2
+      <o:p></o:p>
+    </i>
+  </p>
+  <p class=MsoListParagraphCxSpMiddle style='text-indent:-.25in;mso-list:l0 level3 lfo1'>
+    <![if !supportLists]>
+    <span style='font-family:Symbol;mso-fareast-font-family:Symbol;mso-bidi-font-family:  Symbol'>
+      <span style='mso-list:Ignore'>·
+        <span style='font:7.0pt "Times New Roman"'> </span>
+      </span>
+    </span>
+    <![endif]>Item 3 </p>
+  <p class=MsoListParagraphCxSpLast style='text-indent:-.25in;mso-list:l0 level1 lfo1'>
+    <![if !supportLists]>
+    <span style='font-family:Symbol;mso-fareast-font-family:Symbol;mso-bidi-font-family:  Symbol'>
+      <span style='mso-list:Ignore'>·
+        <span style='font:7.0pt "Times New Roman"'> </span>
+      </span>
+    </span>
+    <![endif]>Item 4</p>
+  <!--EndFragment-->List`;
+  const markdown = `Sample\n\n* **Item 1**\n  * *Item 2*\n    * Item 3\n* Item 4\n\nList`;
+  assert.equal(toMarkdown(html), markdown);
+});
+
+QUnit.test("keeps mention/hash class", assert => {
+  const html = `
+    <p>User mention: <a class="mention" href="/u/discourse">@discourse</a></p>
+    <p>Group mention: <a class="mention-group" href="/groups/discourse">@discourse-group</a></p>
+    <p>Category link: <a class="hashtag" href="/c/foo/1">#<span>foo</span></a></p>
+    <p>Sub-category link: <a class="hashtag" href="/c/foo/bar/2">#<span>foo:bar</span></a></p>
+  `;
+
+  const markdown = `User mention: @discourse\n\nGroup mention: @discourse-group\n\nCategory link: #foo\n\nSub-category link: #foo:bar`;
+
   assert.equal(toMarkdown(html), markdown);
 });

@@ -10,6 +10,9 @@ require 'archetype'
 require 'digest/sha1'
 
 class Post < ActiveRecord::Base
+  # TODO: Remove this after 19th Dec 2018
+  self.ignored_columns = %w{vote_count}
+
   include RateLimiter::OnCreateRecord
   include Trashable
   include Searchable
@@ -48,7 +51,7 @@ class Post < ActiveRecord::Base
   has_many :post_details
 
   has_many :post_revisions
-  has_many :revisions, foreign_key: :post_id, class_name: 'PostRevision'
+  has_many :revisions, -> { order(:number) }, foreign_key: :post_id, class_name: 'PostRevision'
 
   has_many :user_actions, foreign_key: :target_post_id
 
@@ -113,7 +116,8 @@ class Post < ActiveRecord::Base
     @hidden_reasons ||= Enum.new(flag_threshold_reached: 1,
                                  flag_threshold_reached_again: 2,
                                  new_user_spam_threshold_reached: 3,
-                                 flagged_by_tl3_user: 4)
+                                 flagged_by_tl3_user: 4,
+                                 email_spam_header_found: 5)
   end
 
   def self.types
@@ -164,7 +168,7 @@ class Post < ActiveRecord::Base
     }.merge(options)
 
     if Topic.visible_post_types.include?(post_type)
-      if topic.archetype == Archetype.private_message
+      if topic.private_message?
         user_ids = User.where('admin or moderator').pluck(:id)
         user_ids |= topic.allowed_users.pluck(:id)
         MessageBus.publish(channel, msg, user_ids: user_ids)
@@ -222,7 +226,13 @@ class Post < ActiveRecord::Base
     @post_analyzers[raw_hash] ||= PostAnalyzer.new(raw, topic_id)
   end
 
-  %w{raw_mentions linked_hosts image_count attachment_count link_count raw_links}.each do |attr|
+  %w{raw_mentions
+    linked_hosts
+    image_count
+    attachment_count
+    link_count
+    raw_links
+    has_oneboxes?}.each do |attr|
     define_method(attr) do
       post_analyzer.send(attr)
     end
@@ -320,7 +330,7 @@ class Post < ActiveRecord::Base
 
   # Prevent new users from posting the same hosts too many times.
   def has_host_spam?
-    return false if acting_user.present? && (acting_user.staged? || acting_user.has_trust_level?(TrustLevel[1]))
+    return false if acting_user.present? && (acting_user.staged? || acting_user.mature_staged? || acting_user.has_trust_level?(TrustLevel[1]))
     return false if topic&.private_message?
 
     total_hosts_usage.values.any? { |count| count >= SiteSetting.newuser_spam_host_threshold }
@@ -338,23 +348,31 @@ class Post < ActiveRecord::Base
     order('sort_order desc, post_number desc')
   end
 
-  def self.summary(topic_id = nil)
-    # PERF: if you pass in nil it is WAY slower
-    #  pg chokes getting a reasonable plan
-    topic_id = topic_id ? topic_id.to_i : "posts.topic_id"
+  def self.summary(topic_id)
+    topic_id = topic_id.to_i
 
     # percent rank has tons of ties
-    where(["post_number = 1 or id in (
+    where(topic_id: topic_id)
+      .where([
+        "id = ANY(
+          (
+            SELECT posts.id
+            FROM posts
+            WHERE posts.topic_id = #{topic_id.to_i}
+            AND posts.post_number = 1
+          ) UNION
+          (
             SELECT p1.id
             FROM posts p1
-            WHERE p1.percent_rank <= ? AND
-               p1.topic_id = #{topic_id}
+            WHERE p1.percent_rank <= ?
+            AND p1.topic_id = #{topic_id.to_i}
             ORDER BY p1.percent_rank
             LIMIT ?
-          )",
-           SiteSetting.summary_percent_filter.to_f / 100.0,
-           SiteSetting.summary_max_results
-    ])
+          )
+        )",
+        SiteSetting.summary_percent_filter.to_f / 100.0,
+        SiteSetting.summary_max_results
+      ])
   end
 
   def update_flagged_posts_count
@@ -398,6 +416,10 @@ class Post < ActiveRecord::Base
   # Strip out most of the markup
   def excerpt(maxlength = nil, options = {})
     Post.excerpt(cooked, maxlength, options)
+  end
+
+  def excerpt_for_topic
+    Post.excerpt(cooked, 220, strip_links: true, strip_images: true)
   end
 
   def is_first_post?
@@ -521,16 +543,17 @@ class Post < ActiveRecord::Base
     return if user_id == new_user.id
 
     edit_reason = I18n.with_locale(SiteSetting.default_locale) do
-      I18n.t('change_owner.post_revision_text',
-             old_user: (self.user.username_lower rescue nil) || I18n.t('change_owner.deleted_user'),
-             new_user: new_user.username_lower
+      I18n.t(
+        'change_owner.post_revision_text',
+        old_user: self.user&.username_lower || I18n.t('change_owner.deleted_user'),
+        new_user: new_user.username_lower
       )
     end
 
     revise(
       actor,
       { raw: self.raw, user_id: new_user.id, edit_reason: edit_reason },
-      bypass_bump: true, skip_revision: skip_revision
+      bypass_bump: true, skip_revision: skip_revision, skip_validations: true
     )
 
     if post_number == topic.highest_post_number
@@ -556,7 +579,7 @@ class Post < ActiveRecord::Base
   # each post.
   def self.calculate_avg_time(min_topic_age = nil)
     retry_lock_error do
-      builder = SqlBuilder.new("UPDATE posts
+      builder = DB.build("UPDATE posts
                 SET avg_time = (x.gmean / 1000)
                 FROM (SELECT post_timings.topic_id,
                              post_timings.post_number,
@@ -595,7 +618,7 @@ class Post < ActiveRecord::Base
 
   def advance_draft_sequence
     return if topic.blank? # could be deleted
-    DraftSequence.next!(last_editor_id, topic.draft_key)
+    DraftSequence.next!(last_editor_id, topic.draft_key) if last_editor_id
   end
 
   # TODO: move to post-analyzer?
@@ -607,7 +630,9 @@ class Post < ActiveRecord::Base
     raw.scan(/\[quote=\"([^"]+)"\]/).each do |quote|
       args = parse_quote_into_arguments(quote)
       # If the topic attribute is present, ensure it's the same topic
-      temp_collector << args[:post] unless (args[:topic].present? && topic_id != args[:topic])
+      if !(args[:topic].present? && topic_id != args[:topic]) && args[:post] != post_number
+        temp_collector << args[:post]
+      end
     end
 
     temp_collector.uniq!
@@ -643,25 +668,34 @@ class Post < ActiveRecord::Base
     result = public_posts.where('posts.created_at >= ? AND posts.created_at <= ?', start_date, end_date)
       .where(post_type: Post.types[:regular])
     result = result.where('topics.category_id = ?', category_id) if category_id
-    result.group('date(posts.created_at)').order('date(posts.created_at)').count
+    result
+      .group('date(posts.created_at)')
+      .order('date(posts.created_at)')
+      .count
   end
 
   def self.private_messages_count_per_day(start_date, end_date, topic_subtype)
-    private_posts.with_topic_subtype(topic_subtype).where('posts.created_at >= ? AND posts.created_at <= ?', start_date, end_date).group('date(posts.created_at)').order('date(posts.created_at)').count
+    private_posts.with_topic_subtype(topic_subtype)
+      .where('posts.created_at >= ? AND posts.created_at <= ?', start_date, end_date)
+      .group('date(posts.created_at)')
+      .order('date(posts.created_at)')
+      .count
   end
 
   def reply_history(max_replies = 100, guardian = nil)
-    post_ids = Post.exec_sql("WITH RECURSIVE breadcrumb(id, reply_to_post_number) AS (
-                              SELECT p.id, p.reply_to_post_number FROM posts AS p
-                                WHERE p.id = :post_id
-                              UNION
-                                 SELECT p.id, p.reply_to_post_number FROM posts AS p, breadcrumb
-                                   WHERE breadcrumb.reply_to_post_number = p.post_number
-                                     AND p.topic_id = :topic_id
-                            ) SELECT id from breadcrumb ORDER by id", post_id: id, topic_id: topic_id).to_a
-
-    post_ids.map! { |r| r['id'].to_i }
-      .reject! { |post_id| post_id == id }
+    post_ids = DB.query_single(<<~SQL, post_id: id, topic_id: topic_id)
+    WITH RECURSIVE breadcrumb(id, reply_to_post_number) AS (
+          SELECT p.id, p.reply_to_post_number FROM posts AS p
+            WHERE p.id = :post_id
+          UNION
+             SELECT p.id, p.reply_to_post_number FROM posts AS p, breadcrumb
+               WHERE breadcrumb.reply_to_post_number = p.post_number
+                 AND p.topic_id = :topic_id
+        )
+    SELECT id from breadcrumb
+    WHERE id <> :post_id
+    ORDER by id
+    SQL
 
     # [1,2,3][-10,-1] => nil
     post_ids = (post_ids[(0 - max_replies)..-1] || post_ids)
@@ -671,27 +705,40 @@ class Post < ActiveRecord::Base
 
   MAX_REPLY_LEVEL ||= 1000
 
-  def reply_ids(guardian = nil)
-    replies = Post.exec_sql("
+  def reply_ids(guardian = nil, only_replies_to_single_post: true)
+    builder = DB.build(<<~SQL)
       WITH RECURSIVE breadcrumb(id, level) AS (
         SELECT :post_id, 0
         UNION
         SELECT reply_id, level + 1
-          FROM post_replies, breadcrumb
-         WHERE post_id = id
-           AND post_id <> reply_id
-           AND level < #{MAX_REPLY_LEVEL}
+        FROM post_replies AS r
+          JOIN breadcrumb AS b ON (r.post_id = b.id)
+        WHERE r.post_id <> r.reply_id
+              AND b.level < :max_reply_level
       ), breadcrumb_with_count AS (
-        SELECT id, level, COUNT(*)
-          FROM post_replies, breadcrumb
-         WHERE reply_id = id
-           AND reply_id <> post_id
-         GROUP BY id, level
+          SELECT
+            id,
+            level,
+            COUNT(*) AS count
+          FROM post_replies AS r
+            JOIN breadcrumb AS b ON (r.reply_id = b.id)
+          WHERE r.reply_id <> r.post_id
+          GROUP BY id, level
       )
-      SELECT id, level FROM breadcrumb_with_count WHERE level > 0 AND count = 1 ORDER BY id
-    ", post_id: id).to_a
+      SELECT id, level
+      FROM breadcrumb_with_count
+      /*where*/
+      ORDER BY id
+    SQL
 
-    replies.map! { |r| { id: r["id"].to_i, level: r["level"].to_i } }
+    builder.where("level > 0")
+
+    # ignore posts that aren't replies to exactly one post
+    # for example it skips a post when it contains 2 quotes (which are replies) from different posts
+    builder.where("count = 1") if only_replies_to_single_post
+
+    replies = builder.query_hash(post_id: id, max_reply_level: MAX_REPLY_LEVEL)
+    replies.each { |r| r.symbolize_keys! }
 
     secured_ids = Post.secured(guardian).where(id: replies.map { |r| r[:id] }).pluck(:id).to_set
 
@@ -710,11 +757,11 @@ class Post < ActiveRecord::Base
   def self.rebake_all_quoted_posts(user_id)
     return if user_id.blank?
 
-    Post.exec_sql <<-SQL
+    DB.exec(<<~SQL, user_id)
       WITH user_quoted_posts AS (
         SELECT post_id
           FROM quoted_posts
-         WHERE quoted_post_id IN (SELECT id FROM posts WHERE user_id = #{user_id})
+         WHERE quoted_post_id IN (SELECT id FROM posts WHERE user_id = ?)
       )
       UPDATE posts
          SET baked_version = NULL
@@ -735,6 +782,10 @@ class Post < ActiveRecord::Base
     UserActionCreator.log_post(self)
   end
 
+  def locked?
+    locked_by_id.present?
+  end
+
   private
 
   def parse_quote_into_arguments(quote)
@@ -753,7 +804,7 @@ class Post < ActiveRecord::Base
   end
 
   def create_reply_relationship_with(post)
-    return if post.nil?
+    return if post.nil? || self.deleted_at.present?
     post_reply = post.post_replies.new(reply_id: id)
     if post_reply.save
       if Topic.visible_post_types.include?(self.post_type)
@@ -788,7 +839,6 @@ end
 #  score                   :float
 #  reads                   :integer          default(0), not null
 #  post_type               :integer          default(1), not null
-#  vote_count              :integer          default(0), not null
 #  sort_order              :integer
 #  last_editor_id          :integer
 #  hidden                  :boolean          default(FALSE), not null
@@ -804,7 +854,7 @@ end
 #  notify_user_count       :integer          default(0), not null
 #  like_score              :integer          default(0), not null
 #  deleted_by_id           :integer
-#  edit_reason             :string(255)
+#  edit_reason             :string
 #  word_count              :integer
 #  version                 :integer          default(1), not null
 #  cook_method             :integer          default(1), not null
@@ -817,8 +867,9 @@ end
 #  via_email               :boolean          default(FALSE), not null
 #  raw_email               :text
 #  public_version          :integer          default(1), not null
-#  action_code             :string(255)
+#  action_code             :string
 #  image_url               :string
+#  locked_by_id            :integer
 #
 # Indexes
 #

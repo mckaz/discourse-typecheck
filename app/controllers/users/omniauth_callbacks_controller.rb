@@ -41,20 +41,27 @@ class Users::OmniauthCallbacksController < ApplicationController
     @auth_result = authenticator.after_authenticate(auth)
 
     origin = request.env['omniauth.origin']
+
     if cookies[:destination_url].present?
       origin = cookies[:destination_url]
       cookies.delete(:destination_url)
     end
 
     if origin.present?
-      parsed = URI.parse(origin) rescue nil
+      parsed = begin
+        URI.parse(origin)
+      rescue URI::InvalidURIError
+      end
+
       if parsed
         @origin = "#{parsed.path}?#{parsed.query}"
       end
     end
 
-    unless @origin.present?
+    if @origin.blank?
       @origin = Discourse.base_uri("/")
+    else
+      @auth_result.destination_url = origin
     end
 
     if @auth_result.failed?
@@ -86,16 +93,19 @@ class Users::OmniauthCallbacksController < ApplicationController
   def self.find_authenticator(name)
     BUILTIN_AUTH.each do |authenticator|
       if authenticator.name == name
-        raise Discourse::InvalidAccess.new("provider is not enabled") unless SiteSetting.send("enable_#{name}_logins?")
+        raise Discourse::InvalidAccess.new(I18n.t("provider_not_enabled")) unless SiteSetting.send("enable_#{name}_logins?")
         return authenticator
       end
     end
 
     Discourse.auth_providers.each do |provider|
+      unless provider.enabled_setting.nil? || SiteSetting.send(provider.enabled_setting)
+        raise Discourse::InvalidAccess.new(I18n.t("provider_not_enabled"))
+      end
       return provider.authenticator if provider.name == name
     end
 
-    raise Discourse::InvalidAccess.new("provider is not found")
+    raise Discourse::InvalidAccess.new(I18n.t("provider_not_found"))
   end
 
   protected
@@ -111,11 +121,24 @@ class Users::OmniauthCallbacksController < ApplicationController
   end
 
   def user_found(user)
+    if user.totp_enabled?
+      @auth_result.omniauth_disallow_totp = true
+      @auth_result.email = user.email
+      return
+    end
+
     # automatically activate/unstage any account if a provider marked the email valid
     if @auth_result.email_valid && @auth_result.email == user.email
-      user.update!(staged: false)
+      user.unstage
+      user.save
+
       # ensure there is an active email token
-      user.email_tokens.create(email: user.email) unless EmailToken.where(email: user.email, confirmed: true).present? || user.email_tokens.active.where(email: user.email).exists?
+      unless EmailToken.where(email: user.email, confirmed: true).exists? ||
+        user.email_tokens.active.where(email: user.email).exists?
+
+        user.email_tokens.create!(email: user.email)
+      end
+
       user.activate
       user.update!(registration_ip_address: request.remote_ip) if user.registration_ip_address.blank?
     end

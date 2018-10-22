@@ -27,11 +27,24 @@ function modifyContent(pluginApiIdentifiers, contentFunction) {
 
 let _modifyHeaderComputedContentCallbacks = {};
 function modifyHeaderComputedContent(pluginApiIdentifiers, contentFunction) {
-  if (Ember.isNone(_modifyHeaderComputedContentCallbacks[pluginApiIdentifiers])) {
+  if (
+    Ember.isNone(_modifyHeaderComputedContentCallbacks[pluginApiIdentifiers])
+  ) {
     _modifyHeaderComputedContentCallbacks[pluginApiIdentifiers] = [];
   }
 
-  _modifyHeaderComputedContentCallbacks[pluginApiIdentifiers].push(contentFunction);
+  _modifyHeaderComputedContentCallbacks[pluginApiIdentifiers].push(
+    contentFunction
+  );
+}
+
+let _modifyCollectionHeaderCallbacks = {};
+function modifyCollectionHeader(pluginApiIdentifiers, contentFunction) {
+  if (Ember.isNone(_modifyCollectionHeaderCallbacks[pluginApiIdentifiers])) {
+    _modifyCollectionHeaderCallbacks[pluginApiIdentifiers] = [];
+  }
+
+  _modifyCollectionHeaderCallbacks[pluginApiIdentifiers].push(contentFunction);
 }
 
 let _onSelectCallbacks = {};
@@ -44,14 +57,14 @@ function onSelect(pluginApiIdentifiers, mutationFunction) {
 }
 
 export function applyContentPluginApiCallbacks(identifiers, content, context) {
-  identifiers.forEach((key) => {
-    (_prependContentCallbacks[key] || []).forEach((c) => {
+  identifiers.forEach(key => {
+    (_prependContentCallbacks[key] || []).forEach(c => {
       content = c().concat(content);
     });
-    (_appendContentCallbacks[key] || []).forEach((c) => {
+    (_appendContentCallbacks[key] || []).forEach(c => {
       content = content.concat(c());
     });
-    (_modifyContentCallbacks[key] || []).forEach((c) => {
+    (_modifyContentCallbacks[key] || []).forEach(c => {
       content = c(context, content);
     });
   });
@@ -59,9 +72,23 @@ export function applyContentPluginApiCallbacks(identifiers, content, context) {
   return content;
 }
 
-export function applyHeaderContentPluginApiCallbacks(identifiers, content, context) {
-  identifiers.forEach((key) => {
-    (_modifyHeaderComputedContentCallbacks[key] || []).forEach((c) => {
+export function applyHeaderContentPluginApiCallbacks(
+  identifiers,
+  content,
+  context
+) {
+  identifiers.forEach(key => {
+    (_modifyHeaderComputedContentCallbacks[key] || []).forEach(c => {
+      content = c(context, content);
+    });
+  });
+
+  return content;
+}
+
+export function applyCollectionHeaderCallbacks(identifiers, content, context) {
+  identifiers.forEach(key => {
+    (_modifyCollectionHeaderCallbacks[key] || []).forEach(c => {
       content = c(context, content);
     });
   });
@@ -70,30 +97,38 @@ export function applyHeaderContentPluginApiCallbacks(identifiers, content, conte
 }
 
 export function applyOnSelectPluginApiCallbacks(identifiers, val, context) {
-  identifiers.forEach((key) => {
-    (_onSelectCallbacks[key] || []).forEach((c) => c(context, val));
+  identifiers.forEach(key => {
+    (_onSelectCallbacks[key] || []).forEach(c => c(context, val));
   });
 }
 
 export function modifySelectKit(pluginApiIdentifiers) {
   return {
-    appendContent: (content) => {
-      appendContent(pluginApiIdentifiers, () => {return content;} );
+    appendContent: content => {
+      appendContent(pluginApiIdentifiers, () => {
+        return content;
+      });
       return modifySelectKit(pluginApiIdentifiers);
     },
-    prependContent: (content) => {
-      prependContent(pluginApiIdentifiers, () => {return content;} );
+    prependContent: content => {
+      prependContent(pluginApiIdentifiers, () => {
+        return content;
+      });
       return modifySelectKit(pluginApiIdentifiers);
     },
-    modifyContent: (callback) => {
+    modifyContent: callback => {
       modifyContent(pluginApiIdentifiers, callback);
       return modifySelectKit(pluginApiIdentifiers);
     },
-    modifyHeaderComputedContent: (callback) => {
+    modifyHeaderComputedContent: callback => {
       modifyHeaderComputedContent(pluginApiIdentifiers, callback);
       return modifySelectKit(pluginApiIdentifiers);
     },
-    onSelect: (callback) => {
+    modifyCollectionHeader: callback => {
+      modifyCollectionHeader(pluginApiIdentifiers, callback);
+      return modifySelectKit(pluginApiIdentifiers);
+    },
+    onSelect: callback => {
       onSelect(pluginApiIdentifiers, callback);
       return modifySelectKit(pluginApiIdentifiers);
     }
@@ -105,6 +140,7 @@ export function clearCallbacks() {
   _prependContentCallbacks = {};
   _modifyContentCallbacks = {};
   _modifyHeaderComputedContentCallbacks = {};
+  _modifyCollectionHeaderCallbacks = {};
   _onSelectCallbacks = {};
 }
 

@@ -281,7 +281,7 @@ module BackupRestore
 
     def remove_tar_leftovers
       log "Removing '.tar' leftovers..."
-      system('rm', '-f', "#{@archive_directory}/*.tar")
+      Dir["#{@archive_directory}/*.tar"].each { |filename| File.delete(filename) }
     end
 
     def remove_tmp_directory
@@ -316,8 +316,8 @@ module BackupRestore
 
     def log(message)
       timestamp = Time.now.strftime("%Y-%m-%d %H:%M:%S")
-      puts(message) rescue nil
-      publish_log(message, timestamp) rescue nil
+      puts(message)
+      publish_log(message, timestamp)
       save_log(message, timestamp)
     end
 

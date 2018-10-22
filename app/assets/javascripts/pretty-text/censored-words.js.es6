@@ -1,9 +1,12 @@
 function escapeRegexp(text) {
-  return text.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&').replace(/\*/g, "\S*");
+  return text.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&").replace(/\*/g, "S*");
 }
 
-export function censorFn(censoredWords, censoredPattern, replacementLetter, watchedWordsRegularExpressions) {
-
+export function censorFn(
+  censoredWords,
+  replacementLetter,
+  watchedWordsRegularExpressions
+) {
   let patterns = [];
 
   replacementLetter = replacementLetter || "&#9632;";
@@ -15,35 +18,47 @@ export function censorFn(censoredWords, censoredPattern, replacementLetter, watc
     }
   }
 
-  if (censoredPattern && censoredPattern.length > 0) {
-    patterns.push("(" + censoredPattern + ")");
-  }
-
   if (patterns.length) {
     let censorRegexp;
 
     try {
       if (watchedWordsRegularExpressions) {
-        censorRegexp = new RegExp("((?:" + patterns.join("|") + "))(?![^\\(]*\\))", "ig");
+        censorRegexp = new RegExp(
+          "((?:" + patterns.join("|") + "))(?![^\\(]*\\))",
+          "ig"
+        );
       } else {
-        censorRegexp = new RegExp("(\\b(?:" + patterns.join("|") + ")\\b)(?![^\\(]*\\))", "ig");
+        censorRegexp = new RegExp(
+          "(\\b(?:" + patterns.join("|") + ")\\b)(?![^\\(]*\\))",
+          "ig"
+        );
       }
 
       if (censorRegexp) {
-
         return function(text) {
           let original = text;
 
           try {
             let m = censorRegexp.exec(text);
+            const fourCharReplacement = new Array(5).join(replacementLetter);
 
             while (m && m[0]) {
-              if (m[0].length > original.length) { return original; } // regex is dangerous
-              const replacement = new Array(m[0].length+1).join(replacementLetter);
+              if (m[0].length > original.length) {
+                return original;
+              } // regex is dangerous
               if (watchedWordsRegularExpressions) {
-                text = text.replace(new RegExp(`(${escapeRegexp(m[0])})(?![^\\(]*\\))`, "ig"), replacement);
+                text = text.replace(censorRegexp, fourCharReplacement);
               } else {
-                text = text.replace(new RegExp(`(\\b${escapeRegexp(m[0])}\\b)(?![^\\(]*\\))`, "ig"), replacement);
+                const replacement = new Array(m[0].length + 1).join(
+                  replacementLetter
+                );
+                text = text.replace(
+                  new RegExp(
+                    `(\\b${escapeRegexp(m[0])}\\b)(?![^\\(]*\\))`,
+                    "ig"
+                  ),
+                  replacement
+                );
               }
               m = censorRegexp.exec(text);
             }
@@ -53,16 +68,17 @@ export function censorFn(censoredWords, censoredPattern, replacementLetter, watc
             return original;
           }
         };
-
       }
-    } catch(e) {
+    } catch (e) {
       // fall through
     }
   }
 
-  return function(t){ return t;};
+  return function(t) {
+    return t;
+  };
 }
 
-export function censor(text, censoredWords, censoredPattern, replacementLetter) {
-  return censorFn(censoredWords, censoredPattern, replacementLetter)(text);
+export function censor(text, censoredWords, replacementLetter) {
+  return censorFn(censoredWords, replacementLetter)(text);
 }

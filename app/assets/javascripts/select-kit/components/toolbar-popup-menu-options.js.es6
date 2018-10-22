@@ -6,7 +6,6 @@ export default DropdownSelectBoxComponent.extend({
   classNames: ["toolbar-popup-menu-options"],
   isHidden: Ember.computed.empty("computedContent"),
   showFullTitle: false,
-  collectionHeight: "auto",
 
   @computed("title")
   collectionHeader(title) {
@@ -15,25 +14,27 @@ export default DropdownSelectBoxComponent.extend({
 
   mutateValue(value) {
     this.sendAction("onPopupMenuAction", value);
-    this.setProperties({ value: null, highlightedValue: null });
+    this.setProperties({ value: null, highlighted: null });
   },
 
   computeContent(content) {
-    return content.map(contentItem => {
-      if (contentItem.condition) {
-        return {
-          icon: contentItem.icon,
-          name: I18n.t(contentItem.label),
-          id: contentItem.action
-        };
-      }
-    }).filter(contentItem => contentItem);
+    return content
+      .map(contentItem => {
+        if (contentItem.condition) {
+          return {
+            icon: contentItem.icon,
+            name: I18n.t(contentItem.label),
+            id: contentItem.action
+          };
+        }
+      })
+      .filter(contentItem => contentItem);
   },
 
   didInsertElement() {
     this._super();
 
-    $("#reply-control").on("touchstart.toolbar-popup-menu-options", (event) => {
+    $("#reply-control").on("touchstart.toolbar-popup-menu-options", event => {
       if (this.get("isExpanded") && !this.element.contains(event.target)) {
         this.close(event);
       }

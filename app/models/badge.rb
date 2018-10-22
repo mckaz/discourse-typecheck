@@ -136,7 +136,7 @@ class Badge < ActiveRecord::Base
   end
 
   def self.ensure_consistency!
-    exec_sql <<-SQL.squish
+    DB.exec <<~SQL
       DELETE FROM user_badges
             USING user_badges ub
         LEFT JOIN users u ON u.id = ub.user_id
@@ -144,7 +144,7 @@ class Badge < ActiveRecord::Base
               AND user_badges.id = ub.id
     SQL
 
-    exec_sql <<-SQL.squish
+    DB.exec <<~SQL
       WITH X AS (
           SELECT badge_id
                , COUNT(user_id) users
@@ -225,13 +225,13 @@ class Badge < ActiveRecord::Base
 
   protected
 
-    def ensure_not_system
-      self.id = [Badge.maximum(:id) + 1, 100].max unless id
-    end
+  def ensure_not_system
+    self.id = [Badge.maximum(:id) + 1, 100].max unless id
+  end
 
-    def i18n_name
-      self.name.downcase.tr(' ', '_')
-    end
+  def i18n_name
+    self.name.downcase.tr(' ', '_')
+  end
 
 end
 
@@ -240,7 +240,7 @@ end
 # Table name: badges
 #
 #  id                :integer          not null, primary key
-#  name              :string(255)      not null
+#  name              :string           not null
 #  description       :text
 #  badge_type_id     :integer          not null
 #  grant_count       :integer          default(0), not null
@@ -248,7 +248,7 @@ end
 #  updated_at        :datetime         not null
 #  allow_title       :boolean          default(FALSE), not null
 #  multiple_grant    :boolean          default(FALSE), not null
-#  icon              :string(255)      default("fa-certificate")
+#  icon              :string           default("fa-certificate")
 #  listable          :boolean          default(TRUE)
 #  target_posts      :boolean          default(FALSE)
 #  query             :text
@@ -263,5 +263,6 @@ end
 #
 # Indexes
 #
-#  index_badges_on_name  (name) UNIQUE
+#  index_badges_on_badge_type_id  (badge_type_id)
+#  index_badges_on_name           (name) UNIQUE
 #

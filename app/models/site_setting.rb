@@ -38,7 +38,7 @@ class SiteSetting < ActiveRecord::Base
   end
 
   def self.private_message_title_length
-    min_private_message_title_length..max_topic_title_length
+    min_personal_message_title_length..max_topic_title_length
   end
 
   def self.post_length
@@ -50,7 +50,7 @@ class SiteSetting < ActiveRecord::Base
   end
 
   def self.private_message_post_length
-    min_private_message_post_length..max_post_length
+    min_personal_message_post_length..max_post_length
   end
 
   def self.top_menu_items
@@ -132,8 +132,13 @@ class SiteSetting < ActiveRecord::Base
       SiteSetting.enable_s3_uploads || GlobalSetting.use_s3?
     end
 
+    def self.s3_base_url
+      path = self.s3_upload_bucket.split("/", 2)[1]
+      "#{self.absolute_base_url}#{path ? '/' + path : ''}"
+    end
+
     def self.absolute_base_url
-      bucket = SiteSetting.enable_s3_uploads ? Discourse.store.s3_bucket_name : GlobalSetting.s3_bucket
+      bucket = SiteSetting.enable_s3_uploads ? Discourse.store.s3_bucket_name : GlobalSetting.s3_bucket_name
 
       # cf. http://docs.aws.amazon.com/general/latest/gr/rande.html#s3_region
       if SiteSetting.Upload.s3_region == "us-east-1"
@@ -150,6 +155,11 @@ class SiteSetting < ActiveRecord::Base
     SiteSetting::Upload
   end
 
+  def self.shared_drafts_enabled?
+    c = SiteSetting.shared_drafts_category
+    c.present? && c.to_i != SiteSetting.uncategorized_category_id.to_i
+  end
+
 end
 
 # == Schema Information
@@ -157,7 +167,7 @@ end
 # Table name: site_settings
 #
 #  id         :integer          not null, primary key
-#  name       :string(255)      not null
+#  name       :string           not null
 #  data_type  :integer          not null
 #  value      :text
 #  created_at :datetime         not null

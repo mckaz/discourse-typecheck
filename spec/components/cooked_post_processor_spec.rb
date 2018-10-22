@@ -152,20 +152,45 @@ describe CookedPostProcessor do
       before do
         SiteSetting.max_image_height = 2000
         SiteSetting.create_thumbnails = true
-
-        Upload.expects(:get_from_url).returns(upload)
         FastImage.expects(:size).returns([1750, 2000])
-        OptimizedImage.expects(:resize).returns(true)
-
-        FileStore::BaseStore.any_instance.expects(:get_depth_for).returns(0)
       end
 
       it "generates overlay information" do
+        Upload.expects(:get_from_url).returns(upload)
+        OptimizedImage.expects(:resize).returns(true)
+
+        FileStore::BaseStore.any_instance.expects(:get_depth_for).returns(0)
+
         cpp.post_process_images
         expect(cpp.html).to match_html "<p><div class=\"lightbox-wrapper\"><a class=\"lightbox\" href=\"/uploads/default/1/1234567890123456.jpg\" data-download-href=\"/uploads/default/#{upload.sha1}\" title=\"logo.png\"><img src=\"/uploads/default/optimized/1X/#{upload.sha1}_1_690x788.png\" width=\"690\" height=\"788\"><div class=\"meta\">
 <span class=\"filename\">logo.png</span><span class=\"informations\">1750x2000 1.21 KB</span><span class=\"expand\"></span>
 </div></a></div></p>"
         expect(cpp).to be_dirty
+      end
+
+      describe 'when image is an svg' do
+        let(:post) do
+          Fabricate(:post, raw: '<img src="/uploads/default/1/1234567890123456.svg">')
+        end
+
+        it 'should not add lightbox' do
+          cpp.post_process_images
+
+          expect(cpp.html).to match_html("<p><img src=\"/uploads/default/1/1234567890123456.svg\" width=\"690\"\ height=\"788\"></p>")
+        end
+
+        describe 'when image src is an URL' do
+          let(:post) do
+            Fabricate(:post, raw: '<img src="http://test.discourse/uploads/default/1/1234567890123456.svg?somepamas">')
+          end
+
+          it 'should not add lightbox' do
+            SiteSetting.crawl_images = true
+            cpp.post_process_images
+
+            expect(cpp.html).to match_html("<p><img src=\"http://test.discourse/uploads/default/1/1234567890123456.svg?somepamas\" width=\"690\"\ height=\"788\"></p>")
+          end
+        end
       end
 
     end
@@ -180,7 +205,7 @@ describe CookedPostProcessor do
         SiteSetting.create_thumbnails = true
 
         Upload.expects(:get_from_url).returns(upload)
-        FastImage.expects(:size).returns([860, 1900])
+        FastImage.expects(:size).returns([860, 2000])
         OptimizedImage.expects(:resize).never
         OptimizedImage.expects(:crop).returns(true)
 
@@ -479,13 +504,32 @@ describe CookedPostProcessor do
 
     before do
       Oneboxer.expects(:onebox)
-        .with("http://www.youtube.com/watch?v=9bZkp7q19f0", post_id: 123, invalidate_oneboxes: true)
+        .with("http://www.youtube.com/watch?v=9bZkp7q19f0", invalidate_oneboxes: true, user_id: nil, category_id: post.topic.category_id)
         .returns("<div>GANGNAM STYLE</div>")
       cpp.post_process_oneboxes
     end
+
     it "inserts the onebox without wrapping p" do
       expect(cpp).to be_dirty
       expect(cpp.html).to match_html "<div>GANGNAM STYLE</div>"
+    end
+  end
+
+  context ".post_process_oneboxes removes nofollow if add_rel_nofollow_to_user_content is disabled" do
+    let(:post) { build(:post_with_youtube, id: 123) }
+    let(:cpp) { CookedPostProcessor.new(post, invalidate_oneboxes: true) }
+
+    before do
+      SiteSetting.add_rel_nofollow_to_user_content = false
+      Oneboxer.expects(:onebox)
+        .with("http://www.youtube.com/watch?v=9bZkp7q19f0", invalidate_oneboxes: true, user_id: nil, category_id: post.topic.category_id)
+        .returns('<aside class="onebox"><a href="https://www.youtube.com/watch?v=9bZkp7q19f0" rel="nofollow noopener">GANGNAM STYLE</a></aside>')
+      cpp.post_process_oneboxes
+    end
+
+    it "removes nofollow noopener from links" do
+      expect(cpp).to be_dirty
+      expect(cpp.html).to match_html '<aside class="onebox"><a href="https://www.youtube.com/watch?v=9bZkp7q19f0">GANGNAM STYLE</a></aside>'
     end
   end
 
@@ -506,8 +550,8 @@ describe CookedPostProcessor do
       </html>
       HTML
 
-      stub_request(:head, url).to_return(status: 200)
-      stub_request(:get , url).to_return(status: 200, body: body)
+      stub_request(:head, url)
+      stub_request(:get , url).to_return(body: body)
       FinalDestination.stubs(:lookup_ip).returns('1.2.3.4')
 
       # not an ideal stub but shipping the whole image to fast image can add
@@ -772,6 +816,40 @@ describe CookedPostProcessor do
       it "awards a badge for replying via email" do
         cpp.grant_badges
         expect(post.user.user_badges.where(badge_id: Badge::FirstReplyByEmail).exists?).to eq(true)
+      end
+    end
+
+  end
+
+  context "quote processing" do
+    let(:cpp) { CookedPostProcessor.new(cp) }
+    let(:pp) { Fabricate(:post, raw: "This post is ripe for quoting!") }
+
+    context "with an unmodified quote" do
+      let(:cp) do
+        Fabricate(
+          :post,
+          raw: "[quote=\"#{pp.user.username}, post: #{pp.post_number}, topic:#{pp.topic_id}]\nripe for quoting\n[/quote]\ntest"
+        )
+      end
+
+      it "should not be marked as modified" do
+        cpp.post_process_quotes
+        expect(cpp.doc.css('aside.quote.quote-modified')).to be_blank
+      end
+    end
+
+    context "with a modified quote" do
+      let(:cp) do
+        Fabricate(
+          :post,
+          raw: "[quote=\"#{pp.user.username}, post: #{pp.post_number}, topic:#{pp.topic_id}]\nmodified\n[/quote]\ntest"
+        )
+      end
+
+      it "should be marked as modified" do
+        cpp.post_process_quotes
+        expect(cpp.doc.css('aside.quote.quote-modified')).to be_present
       end
     end
 

@@ -19,11 +19,11 @@ describe PostMover do
   end
 
   context 'move_posts' do
-    let(:user) { Fabricate(:user) }
+    let(:user) { Fabricate(:user, admin: true) }
     let(:another_user) { Fabricate(:evil_trout) }
     let(:category) { Fabricate(:category, user: user) }
     let!(:topic) { Fabricate(:topic, user: user) }
-    let!(:p1) { Fabricate(:post, topic: topic, user: user) }
+    let!(:p1) { Fabricate(:post, topic: topic, user: user, created_at: 3.hours.ago) }
 
     let!(:p2) do
       Fabricate(:post,
@@ -39,6 +39,8 @@ describe PostMover do
     let(:p6) { Fabricate(:post, topic: topic) }
 
     before do
+      SiteSetting.tagging_enabled = true
+      SiteSetting.queue_jobs = false
       p1.replies << p3
       p2.replies << p4
       UserActionCreator.enable
@@ -177,7 +179,7 @@ describe PostMover do
 
         it "works correctly" do
           topic.expects(:add_moderator_post).once
-          new_topic = topic.move_posts(user, [p2.id, p4.id], title: "new testing topic name", category_id: category.id)
+          new_topic = topic.move_posts(user, [p2.id, p4.id], title: "new testing topic name", category_id: category.id, tags: ["tag1", "tag2"])
 
           expect(TopicUser.find_by(user_id: user.id, topic_id: topic.id).last_read_post_number).to eq(p3.post_number)
 
@@ -186,14 +188,18 @@ describe PostMover do
           expect(new_topic.like_count).to eq(1)
 
           expect(new_topic.category).to eq(category)
+          expect(new_topic.tags.pluck(:name)).to eq(["tag1", "tag2"])
           expect(topic.featured_user1_id).to be_blank
           expect(new_topic.posts.by_post_number).to match_array([p2, p4])
 
           new_topic.reload
           expect(new_topic.posts_count).to eq(2)
           expect(new_topic.highest_post_number).to eq(2)
-          expect(new_topic.last_post_user_id).to eq(new_topic.posts.last.user_id)
-          expect(new_topic.last_posted_at).to be_present
+
+          last_post = new_topic.posts.last
+          expect(new_topic.last_post_user_id).to eq(last_post.user_id)
+          expect(new_topic.last_posted_at).to eq(last_post.created_at)
+          expect(new_topic.bumped_at).to eq(last_post.created_at)
 
           p2.reload
           expect(p2.sort_order).to eq(1)
@@ -398,6 +404,7 @@ describe PostMover do
           # New first post
           new_first = new_topic.posts.where(post_number: 1).first
           expect(new_first.reply_count).to eq(1)
+          expect(new_first.created_at).to be_within(1.second).of(p1.created_at)
 
           # Second post is in a new topic
           p2.reload
@@ -495,6 +502,17 @@ describe PostMover do
         end
       end
 
+      it "skips validations when moving posts" do
+        p1.update_attribute(:raw, "foo")
+        p2.update_attribute(:raw, "bar")
+
+        new_topic = topic.move_posts(user, [p1.id, p2.id], title: "new testing topic name")
+
+        expect(new_topic).to be_present
+        expect(new_topic.posts.by_post_number.first.raw).to eq(p1.raw)
+        expect(new_topic.posts.by_post_number.last.raw).to eq(p2.raw)
+        expect(new_topic.posts_count).to eq(2)
+      end
     end
   end
 end

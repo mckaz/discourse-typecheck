@@ -5,8 +5,11 @@ RSpec.describe Admin::SearchLogsController do
   let(:user) { Fabricate(:user) }
 
   before do
-    SearchLog.clear_debounce_cache!
     SearchLog.log(term: 'ruby', search_type: :header, ip_address: '127.0.0.1')
+  end
+
+  after do
+    SearchLog.clear_debounce_cache!
   end
 
   context "#index" do
@@ -25,7 +28,7 @@ RSpec.describe Admin::SearchLogsController do
       sign_in(admin)
       get '/admin/logs/search_logs.json'
 
-      expect(response).to be_success
+      expect(response.status).to eq(200)
 
       json = ::JSON.parse(response.body)
       expect(json[0]['term']).to eq('ruby')
@@ -48,7 +51,7 @@ RSpec.describe Admin::SearchLogsController do
       sign_in(admin)
         get '/admin/logs/search_logs/term/ruby.json'
 
-      expect(response).to be_success
+      expect(response.status).to eq(200)
 
       json = ::JSON.parse(response.body)
       expect(json['term']['type']).to eq('search_log_term')

@@ -4,7 +4,7 @@
   position: absolute;
   left: 20px;
   z-index: z("dropdown");
-  box-shadow: 0 1px 5px rgba(0,0,0, .4);
+  box-shadow: shadow("card");
   background-color: $secondary;
   padding: 6px 10px 10px 10px;
   width: 300px;
@@ -12,7 +12,7 @@
   &.visible {
     display: block;
   }
-  input[type=text] {
+  input[type="text"] {
     width: 96%;
   }
   .share-for-touch .overflow-ellipsis {
@@ -46,7 +46,7 @@
     float: left;
     line-height: $line-height-large;
     margin-left: 8px;
-    margin-top: .5em;
+    margin-top: 0.5em;
     .fa {
       margin-right: 5px;
     }
@@ -71,7 +71,7 @@
     color: dark-light-choose($primary-medium, $secondary-medium);
   }
 
-  input[type=text] {
+  input[type="text"] {
     font-size: $font-up-1;
     margin-bottom: 10px;
   }
@@ -81,6 +81,6 @@
   display: none;
 }
 
-.discourse-touch #share-link input[type=text] {
+.discourse-touch #share-link input[type="text"] {
   display: none;
 }
