@@ -204,12 +204,24 @@ class User < ActiveRecord::Base
   def self.username_length
     SiteSetting.min_username_length.to_i..SiteSetting.max_username_length.to_i
   end
-
+  
+=begin
+## NEW USERNAME_AVAILABLE? changed with a push upstream
   def self.username_available?(username, email = nil)
     lower = username.downcase
     return false if reserved_username?(lower)
     return true  if DB.exec(User::USERNAME_EXISTS_SQL, username: lower) == 0
 
+    # staged users can use the same username since they will take over the account
+    email.present? && User.joins(:user_emails).exists?(staged: true, username_lower: lower, user_emails: { primary: true, email: email })
+  end
+=end
+
+  ## old username_available?
+  def self.username_available?(username, email = nil)
+    lower = username.downcase
+    return false if reserved_username?(lower)
+    return true  if !User.exists?(username_lower: lower)
     # staged users can use the same username since they will take over the account
     email.present? && User.joins(:user_emails).exists?(staged: true, username_lower: lower, user_emails: { primary: true, email: email })
   end

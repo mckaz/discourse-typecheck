@@ -1,14 +1,13 @@
-#require './db_types.rb'
-require_relative '../db-types/active-record/db_types.rb'
+require './db_types.rb'
 puts '--------------------------------------------------------'
 #export RUBY_THREAD_VM_STACK_SIZE=50000000
 module RDL::Globals
   # Map from table names (symbols) to their schema types, which should be a Table type
-  @ar_db_schema = {}
+  @db_schema = {}
 end
 
 class << RDL::Globals
-  attr_accessor :ar_db_schema
+  attr_accessor :db_schema
 end
 
 
@@ -70,15 +69,8 @@ MODELS.each { |model|
   base_type = RDL::Type::NominalType.new(model.to_s)
   hash_type = RDL::Type::FiniteHashType.new(s2, nil)
   schema = RDL::Type::GenericType.new(base_type, hash_type)
-  RDL::Globals.ar_db_schema[base_name.to_sym] = schema
+  RDL::Globals.db_schema[base_name.to_sym] = schema
 }
-
-
-num_t = 0
-
-ActiveRecord::Base.connection.tables.each { |t| num_t = num_t + 1}
-
-puts "THERE ARE #{num_t} TABLES"
 
 ## uncomment the below to print out schema
 =begin
@@ -92,7 +84,7 @@ RDL::Globals.db_schema.each { |k, v|
 
 ## below is super hacky way around "class_name" issue for now
 class GrantedBy
-  RDL::Globals.ar_db_schema[:GrantedBy] = RDL::Globals.parser.scan_str "#T GrantedBy<{dummy: Integer}>"
+  RDL::Globals.db_schema[:GrantedBy] = RDL::Globals.parser.scan_str "#T GrantedBy<{dummy: Integer}>"
 end
 
 class Datetime; end ## not sure why, but this class isn't initialized during typechecking so we need this
@@ -102,7 +94,7 @@ RDL.type Badge, 'self.trust_level_badge_ids', '() -> [1,2,3,4]', wrap: false
 RDL.type User, :email, '() -> String', wrap: false
 RDL.type User, :email=, '(String) -> String', wrap: false
 RDL.type User, :password=, '(String) -> String', wrap: false
-RDL.type User, 'self.reserved_username?', "(String) -> %bool", wrap: false
+#RDL.type User, 'self.reserved_username?', "(String) -> %bool", wrap: false
 RDL.type EmailToken, 'self.valid_after', '() -> Hash', wrap: false
 RDL.type EmailToken, 'self.confirm', '(String) -> %bool', wrap: false
 RDL.type ActiveRecord::Base, 'self.with_deleted', '() -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), DBType.rec_to_nominal(trec))``', wrap: false
@@ -138,7 +130,7 @@ RDL.type ActiveRecord::Base, 'self.reset_counters', '(Integer, Symbol) -> Intege
 
 RDL.type User, 'self.new_from_params', '({ name: String, email: String, password: String, username: String }) -> User', typecheck: :later, wrap: false
 RDL.type User, 'self.find_by_username', '(String) -> User', typecheck: :later, wrap: false
-RDL.type User, 'self.username_available?', "(String, ?String) -> %bool", typecheck: :later, wrap: false
+#RDL.type User, 'self.username_available?', "(String, ?String) -> %bool", typecheck: :later, wrap: false
 RDL.type User, :featured_user_badges, '(?Integer) -> %any', typecheck: :later, wrap: false
 RDL.type User, :email_confirmed?, '() -> %bool', typecheck: :later, wrap: false
 RDL.type EmailToken, 'self.active', '() -> ActiveRecord_Relation<EmailToken>', wrap: false, typecheck: :later
