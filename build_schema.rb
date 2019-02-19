@@ -86,3 +86,4 @@ RDL::Globals.db_schema.each { |k, v|
   }
 }
 =end
+

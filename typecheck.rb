@@ -1,3 +1,4 @@
+
 require_relative '../db-types/active-record/db_types.rb'
 #require_relative '../db_type_check/ar_types.rb'
 
@@ -48,8 +49,7 @@ RDL.type Notification, 'self.remove_for', '(Integer, Integer) -> Integer', typec
 RDL.type Notification, :post, '() -> Post', typecheck: :later, wrap: false
 
 
-## Type annotations for unchecked methods are below. These are either methods from the Discourse app, or from external libraries.
-
+## Type annotations for variables and unchecked methods are below. The methods are from the Discourse app, or from external libraries.
 RDL.type Badge, 'self.trust_level_badge_ids', '() -> [1,2,3,4]', wrap: false
 RDL.type User, :email, '() -> String', wrap: false
 RDL.type User, :email=, '(String) -> String', wrap: false
@@ -86,5 +86,8 @@ RDL.type ActiveRecord::Base, 'self.reset_counters', '(Integer, Symbol) -> Intege
 
 
 ## Call `do_typecheck` to type check methods with :later tag
-RDL.do_typecheck :later
+## The second argument is optional and is used for printing configurations.
+RDL.do_typecheck :later, (ENV["NODYNCHECK"] || ENV["TYPECHECK"])
+
+
 
