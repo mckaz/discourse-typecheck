@@ -277,12 +277,10 @@ def file_from_fixtures(filename, directory = "images")
 end
 
 if ENV["TYPECHECK"]
-  puts "Run type checker here..."
   require_relative '../typecheck.rb'
 end
 
 if ENV["NODYNCHECK"]
   RDL::Config.instance.check_comp_types = false
-  puts "Run type checker here..."
   require_relative '../typecheck.rb'
 end

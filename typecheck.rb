@@ -1,4 +1,3 @@
-
 require_relative '../db-types/active-record/db_types.rb'
 #require_relative '../db_type_check/ar_types.rb'
 
