@@ -54,7 +54,7 @@ RDL.type User, :email, '() -> String', wrap: false
 RDL.type User, :email=, '(String) -> String', wrap: false
 RDL.type User, :password=, '(String) -> String', wrap: false
 RDL.type User, 'self.reserved_username?', "(String) -> %bool", wrap: false
-RDL.type EmailToken, 'self.valid_after', '() -> Hash', wrap: false
+RDL.type EmailToken, 'self.valid_after', '() -> DateTime', wrap: false
 RDL.type EmailToken, 'self.confirm', '(String) -> %bool', wrap: false
 RDL.type ActiveRecord::Base, 'self.with_deleted', '() -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), DBType.rec_to_nominal(trec))``', wrap: false
 RDL.type PostActionType, 'self.notify_flag_type_ids', '() -> Array<Integer>', wrap: false
