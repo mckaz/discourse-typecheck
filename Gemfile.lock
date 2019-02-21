@@ -1,5 +1,7 @@
-PATH
-  remote: ../pldi-rdl
+GIT
+  remote: https://github.com/plum-umd/rdl.git
+  revision: 54e7d8842e36c8b6799591bc1ba454eb9d60987b
+  branch: pldi-comp-types
   specs:
     rdl (2.1.0)
       colorize

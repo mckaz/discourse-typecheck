@@ -24,9 +24,7 @@ else
   gem 'seed-fu'
 end
 
-#gem 'rdl', git: 'https://github.com/mckaz/rdl-comp-types.git', branch: 'comp-types'#git: 'https://github.com/plum-umd/rdl/', branch: 'comp-types'
-#gem 'rdl', path: "~/Documents/works/comp-types/rdl/"
-gem 'rdl', path: "~/Documents/works/pldi-rdl/"
+gem 'rdl', git: 'https://github.com/plum-umd/rdl.git', branch: 'pldi-comp-types'
 gem 'mail'
 gem 'mime-types', require: 'mime/types/columnar'
 gem 'mini_mime'
