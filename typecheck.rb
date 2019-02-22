@@ -1,5 +1,4 @@
 require_relative '../db-types/active-record/db_types.rb'
-#require_relative '../db_type_check/ar_types.rb'
 
 ## the file required below builds a model of the DB schema used during type checking.
 require './build_schema.rb'
