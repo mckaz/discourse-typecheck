@@ -206,7 +206,7 @@ class Group < ActiveRecord::Base
 
     result = guardian.filter_allowed_categories(result)
     result = result.where('posts.id < ?', opts[:before_post_id].to_i) if opts[:before_post_id]
-    result.order('posts.created_at desc')
+    RDL.type_cast(result.order('posts.created_at desc'), 'ActiveRecord_Relation<JoinTable<Post, GroupMention or Category or User or Topic>>')
   end
 
   def messages_for(guardian, opts = nil)
@@ -224,7 +224,7 @@ class Group < ActiveRecord::Base
 
     result = guardian.filter_allowed_categories(result)
     result = result.where('posts.id < ?', opts[:before_post_id].to_i) if opts[:before_post_id]
-    result.order('posts.created_at desc')
+    RDL.type_cast(result.order('posts.created_at desc'), 'ActiveRecord_Relation<JoinTable<Post, GroupMention or Category or User or Topic>>')
   end
 
   def mentioned_posts_for(guardian, opts = nil)
@@ -242,7 +242,7 @@ class Group < ActiveRecord::Base
 
     result = guardian.filter_allowed_categories(result)
     result = result.where('posts.id < ?', opts[:before_post_id].to_i) if opts[:before_post_id]
-    result.order('posts.created_at desc')
+    RDL.type_cast(result.order('posts.created_at desc'), 'ActiveRecord_Relation<JoinTable<Post, GroupMention or Category or User or Topic>>')
   end
 
   def self.trust_group_ids

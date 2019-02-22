@@ -36,11 +36,11 @@ class Draft < ActiveRecord::Base
   end
 
   def self.find_draft(user, key)
-    if user.is_a?(User)
+    RDL.type_cast(if user.is_a?(User)
       find_by(user_id: RDL.type_cast(user, 'User', force: true).id, draft_key: key)
     else
       find_by(user_id: RDL.type_cast(user, 'Integer', force: true), draft_key: key)
-    end
+    end, 'Draft')
   end
 
   def self.cleanup!

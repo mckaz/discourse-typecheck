@@ -134,7 +134,7 @@ class Post < ActiveRecord::Base
   end
 
   def self.find_by_detail(key, value)
-    includes(:post_details).find_by(post_details: { key: key, value: value })
+    RDL.type_cast(includes(:post_details).find_by(post_details: { key: key, value: value }), 'Post')
   end
 
   def whisper?

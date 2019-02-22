@@ -843,7 +843,7 @@ class User < ActiveRecord::Base
                       'MAX(badges.grant_count) AS badges_grant_count')
       .joins(:badge)
       .order('badges_badge_type_id ASC, badges_grant_count ASC, badge_id DESC')
-      .includes(:user, :granted_by, { badge: :badge_type }, post: :topic)
+      .includes(:user, :granted_by, RDL.type_cast({ badge: :badge_type }, 'Hash<Symbol, Symbol>'), RDL.type_cast({ post: :topic }, 'Hash<Symbol, Symbol>'))
 
     tl_badge = query.where("user_badges.badge_id IN (:tl_badge_ids)",
                            tl_badge_ids: tl_badge_ids)
@@ -1028,7 +1028,7 @@ class User < ActiveRecord::Base
   end
 
   def create_user_profile
-    UserProfile.create(user_id: id)
+    RDL.type_cast(UserProfile.create(user_id: id), 'UserProfile')
   end
 
   def anonymous?
@@ -1132,7 +1132,7 @@ class User < ActiveRecord::Base
   end
 
   def create_user_option
-    UserOption.create(user_id: id)
+    RDL.type_cast(UserOption.create(user_id: id), 'UserOption')
   end
 
   def create_email_token

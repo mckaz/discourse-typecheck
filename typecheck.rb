@@ -1,9 +1,4 @@
-require_relative '../db-types/active-record/db_types.rb'
-#require_relative '../db_type_check/ar_types.rb'
-
-## the file required below builds a model of the DB schema used during type checking.
-require './build_schema.rb'
-
+require_relative './db_types.rb'
 
 puts "Type checking Discourse methods..."
 
@@ -56,7 +51,6 @@ RDL.type User, :password=, '(String) -> String', wrap: false
 RDL.type User, 'self.reserved_username?', "(String) -> %bool", wrap: false
 RDL.type EmailToken, 'self.valid_after', '() -> DateTime', wrap: false
 RDL.type EmailToken, 'self.confirm', '(String) -> %bool', wrap: false
-RDL.type ActiveRecord::Base, 'self.with_deleted', '() -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), DBType.rec_to_nominal(trec))``', wrap: false
 RDL.type PostActionType, 'self.notify_flag_type_ids', '() -> Array<Integer>', wrap: false
 RDL.type PostActionType, 'self.flag_types_without_custom', '() -> Hash<Symbol, Integer>', wrap: false
 RDL.var_type User, :@raw_password, "String"
@@ -81,11 +75,16 @@ RDL.type ActiveSupport::Duration, :to_i, '() -> Integer', wrap: false
 RDL.type TopicGuardian, :filter_allowed_categories, '(t) -> t', wrap: false
 RDL.type ActiveRecord::Base, 'self.exec_sql', '(String) -> %bool', wrap: false
 RDL.type ActiveRecord::Base, 'self.reset_counters', '(Integer, Symbol) -> Integer', wrap: false
+RDL.type String, :present?, '() -> %bool'
+RDL.type SingleSignOnRecord, :external_email, '() -> String'
+RDL.type Object, :present?, '() -> %bool'
+RDL.type GroupUser, :user_id, '() -> Integer'
 
 
 
 ## Call `do_typecheck` to type check methods with :later tag
 ## The second argument is optional and is used for printing configurations.
+RDL::Config.instance.use_dep_types = false
 RDL.do_typecheck :later, (ENV["NODYNCHECK"] || ENV["TYPECHECK"])
 
 
