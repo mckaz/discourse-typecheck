@@ -8,14 +8,13 @@ require './build_schema.rb'
 puts "Type checking Discourse methods..."
 
 
-## Type annotations for type checked methods are below.
-
+### Type annotations for type checked methods are below.
+## Methods located in ~/discourse/app/models/user.rb
 RDL.type User, 'self.new_from_params', '({ name: String, email: String, password: String, username: String }) -> User', typecheck: :later, wrap: false
 RDL.type User, 'self.find_by_username', '(String) -> User', typecheck: :later, wrap: false
 RDL.type User, 'self.username_available?', "(String, ?String) -> %bool", typecheck: :later, wrap: false
 RDL.type User, :featured_user_badges, '(?Integer) -> %any', typecheck: :later, wrap: false
 RDL.type User, :email_confirmed?, '() -> %bool', typecheck: :later, wrap: false
-RDL.type EmailToken, 'self.active', '() -> ActiveRecord_Relation<EmailToken>', wrap: false, typecheck: :later
 RDL.type User, :activate, '() -> %bool or nil', typecheck: :later, wrap: false
 RDL.type User, :number_of_deleted_posts, '() -> Integer', typecheck: :later, wrap: false
 RDL.type User, :number_of_flags_given, '() -> Integer', typecheck: :later, wrap: false
@@ -24,6 +23,9 @@ RDL.type User, :create_user_option, '() -> UserOption', typecheck: :later, wrap:
 RDL.type User, :create_email_token, '() -> EmailToken', typecheck: :later, wrap: false
 RDL.type User, :update_username_lower, '() -> String', typecheck: :later, wrap: false
 RDL.type User, :seen_before?, '() -> %bool', typecheck: :later, wrap: false
+## Methods located in ~/discourse/app/models/email_token.rb
+RDL.type EmailToken, 'self.active', '() -> ActiveRecord_Relation<EmailToken>', wrap: false, typecheck: :later
+## Methods located in ~/discourse/app/models/post.rb
 RDL.type Post, :seen?, '(User) -> %bool', typecheck: :later, wrap: false
 RDL.type Post, 'self.find_by_detail', '(String, String) -> Post', typecheck: :later, wrap: false
 RDL.type Post, :has_active_flag?, '() -> %bool', typecheck: :later, wrap: false
@@ -32,6 +34,7 @@ RDL.type Post, :is_reply_by_email?, '() -> %bool', typecheck: :later, wrap: fals
 RDL.type Post, :add_detail, "(String, String, ?String) -> PostDetail", typecheck: :later, wrap: false
 RDL.type Post, :limit_posts_per_day, '() -> RateLimiter', typecheck: :later, wrap: false
 RDL.type Archetype, 'self.private_message', '() -> String', typecheck: :later, wrap: false
+## Methods located in ~/discourse/app/models/group.rb
 RDL.type Group, :posts_for, '(Guardian, ?Hash<Symbol, Integer>) -> ActiveRecord_Relation<JoinTable<Post, User or Topic or Category>>', typecheck: :later, wrap: false
 RDL.type Group, :messages_for, '(Guardian, ?Hash<Symbol, Integer>) -> ActiveRecord_Relation<JoinTable<Post, User or Topic or Category>>', typecheck: :later, wrap: false
 RDL.type Group, :mentioned_posts_for, '(Guardian, ?Hash<Symbol, Integer>) -> ActiveRecord_Relation<JoinTable<Post, User or Topic or Category or GroupMention>>', typecheck: :later, wrap: false
@@ -40,10 +43,13 @@ RDL.type Group, 'self.desired_trust_level_groups', '(Integer) -> Array<Integer>'
 RDL.type Group, 'self.user_trust_level_change!', '(Integer, Integer) -> Array<Integer>', typecheck: :later, wrap: false
 RDL.type Group, 'self.refresh_automatic_group!', '(Symbol) -> Group', typecheck: :later, wrap: false
 RDL.type Group, 'self.lookup_group', "(Symbol) -> Group", typecheck: :later, wrap: false
+## Methods located in ~/discourse/app/models/draft.rb
 RDL.type Draft, 'self.find_draft', '(User or Integer, String) -> Draft', typecheck: :later, wrap: false
+## Methods located in ~/discourse/app/models/topic.rb
 RDL.type Topic, :update_action_counts, '() -> %bool', typecheck: :later, wrap: false
 RDL.type Topic, :has_topic_embed?, '() -> %bool', typecheck: :later, wrap: false
 RDL.type Topic, :expandable_first_post?, '() -> %bool', typecheck: :later, wrap: false
+## Methods located in ~/discourse/app/models/notification.rb
 RDL.type Notification, 'self.remove_for', '(Integer, Integer) -> Integer', typecheck: :later, wrap: false
 RDL.type Notification, :post, '() -> Post', typecheck: :later, wrap: false
 
